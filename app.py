@@ -18,19 +18,17 @@ DB_FILE = "sostituzioni.db"
 # =========================
 # FUNZIONI DI SUPPORTO PER GESTIONE DATI
 # =========================
-def get_connection():
-    return sqlite3.connect(DB_FILE)
+def get_gdrive_client():
+    gdrive_credentials = st.secrets["gdrive"]
+    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(gdrive_credentials, scope)
+    client = gspread.authorize(creds)
+    return client
 
 def carica_orario():
     try:
-        # Carica le credenziali da Streamlit Secrets
-        gdrive_credentials = st.secrets["gdrive"]
-        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(gdrive_credentials, scope)
-        client = gspread.authorize(creds)
-        # Sostituisci "OrarioSostituzioni" con il nome del tuo foglio
+        client = get_gdrive_client()
         ORARIO_SHEET_NAME = "OrarioSostituzioni"
-
         sheet = client.open(ORARIO_SHEET_NAME).worksheet("orario")
         df = gd.get_as_dataframe(sheet)
         df = df.dropna(how='all')
@@ -41,12 +39,8 @@ def carica_orario():
 
 def salva_orario(df):
     try:
-        gdrive_credentials = st.secrets["gdrive"]
-        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(gdrive_credentials, scope)
-        client = gspread.authorize(creds)
+        client = get_gdrive_client()
         ORARIO_SHEET_NAME = "OrarioSostituzioni"
-
         sheet = client.open(ORARIO_SHEET_NAME).worksheet("orario")
         gd.set_with_dataframe(sheet, df)
         return True
@@ -56,17 +50,12 @@ def salva_orario(df):
 
 def salva_sostituzione(data, giorno, docente, ore_sostituzione, assenze):
     try:
-        gdrive_credentials = st.secrets["gdrive"]
-        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(gdrive_credentials, scope)
-        client = gspread.authorize(creds)
+        client = get_gdrive_client()
         ORARIO_SHEET_NAME = "OrarioSostituzioni"
 
-        # Salva le sostituzioni
         storico_sheet = client.open(ORARIO_SHEET_NAME).worksheet("storico")
         storico_sheet.append_rows([[data, giorno, docente, ore_sostituzione]])
 
-        # Salva le assenze
         assenze_sheet = client.open(ORARIO_SHEET_NAME).worksheet("assenze")
         assenze_data = [[data, giorno, d[0], d[1], d[2]] for d in assenze]
         assenze_sheet.append_rows(assenze_data)
@@ -99,7 +88,6 @@ def vista_pivot_docenti(df, mode="docenti"):
             aggfunc=lambda x: " / ".join(sorted(list(dict.fromkeys(x)), key=lambda s: 0 if not "[S]" in s else 1))
         ).fillna("-")
     
-    # Resto della funzione vista_pivot_docenti (formattazione, ecc.)
     def color_cells(val):
         text = str(val)
         if "[S]" in text:
@@ -126,17 +114,12 @@ def download_orario(df):
 
 def carica_statistiche():
     try:
-        gdrive_credentials = st.secrets["gdrive"]
-        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(gdrive_credentials, scope)
-        client = gspread.authorize(creds)
+        client = get_gdrive_client()
         ORARIO_SHEET_NAME = "OrarioSostituzioni"
 
-        # Carica storico sostituzioni
         storico_sheet = client.open(ORARIO_SHEET_NAME).worksheet("storico")
         df_storico = gd.get_as_dataframe(storico_sheet)
 
-        # Carica storico assenze
         assenze_sheet = client.open(ORARIO_SHEET_NAME).worksheet("assenze")
         df_assenze = gd.get_as_dataframe(assenze_sheet)
 
@@ -146,7 +129,7 @@ def carica_statistiche():
         return pd.DataFrame(), pd.DataFrame()
 
 # =========================
-# FUNZIONI DI SUPPORTO PER GESTIONE UTENTI (SQLite locale)
+# FUNZIONI DI SUPPORTO PER GESTIONE UTENTI (Google Sheets)
 # =========================
 def hash_password(password):
     hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
@@ -155,28 +138,40 @@ def hash_password(password):
 def check_password(password, hashed_password):
     return bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8'))
 
-def init_db():
-    with get_connection() as conn:
-        c = conn.cursor()
-        c.execute('''CREATE TABLE IF NOT EXISTS utenti
-                     (username TEXT PRIMARY KEY, password_hash TEXT)''')
-        c.execute("SELECT COUNT(*) FROM utenti")
-        if c.fetchone()[0] == 0:
-            default_password = st.secrets.get("admin_password", "password_di_default")
-            hashed = hash_password(default_password)
-            c.execute("INSERT INTO utenti VALUES (?, ?)", ("admin", hashed))
-            conn.commit()
-            st.warning("È stato creato un utente 'admin' con password 'password_di_default' (o quella specificata nel file secrets). Cambiala immediatamente!")
+def get_users_df():
+    try:
+        client = get_gdrive_client()
+        ORARIO_SHEET_NAME = "OrarioSostituzioni"
+        sheet = client.open(ORARIO_SHEET_NAME).worksheet("utenti")
+        df = gd.get_as_dataframe(sheet)
+        df = df.dropna(how='all')
+        if df.empty or 'username' not in df.columns or 'password_hash' not in df.columns:
+            return pd.DataFrame(columns=['username', 'password_hash'])
+        return df
+    except gspread.exceptions.WorksheetNotFound:
+        st.error("Il foglio 'utenti' non è stato trovato. Per favore crealo nel foglio di calcolo.")
+        return pd.DataFrame(columns=['username', 'password_hash'])
+    except Exception as e:
+        st.error(f"Errore nel caricamento degli utenti da Google Sheets: {e}")
+        return pd.DataFrame(columns=['username', 'password_hash'])
+
+def add_user(username, password):
+    try:
+        client = get_gdrive_client()
+        ORARIO_SHEET_NAME = "OrarioSostituzioni"
+        sheet = client.open(ORARIO_SHEET_NAME).worksheet("utenti")
+        hashed_password = hash_password(password)
+        sheet.append_row([username, hashed_password])
+        return True
+    except Exception as e:
+        st.error(f"Errore nell'aggiunta dell'utente: {e}")
+        return False
 
 # =========================
 # LOGICA APPLICAZIONE
 # =========================
 st.title("📚 Gestione orari e Sostituzioni Docenti")
 
-# Inizializza il database utente
-init_db()
-
-# Gestione dello stato di login con session_state
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 
@@ -186,42 +181,43 @@ if not st.session_state["logged_in"]:
     username = st.sidebar.text_input("Username")
     password = st.sidebar.text_input("Password", type="password")
 
+    # Inizializza l'utente admin se non esiste
+    users_df = get_users_df()
+    if users_df.empty or "admin" not in users_df["username"].values:
+        default_password = st.secrets.get("admin_password", "password_di_default")
+        add_user("admin", default_password)
+        st.info("Utente di default 'admin' creato. Usa la password specificata nel file secrets (o 'password_di_default').")
+
     if st.sidebar.button("Accedi"):
-        with get_connection() as conn:
-            c = conn.cursor()
-            c.execute("SELECT password_hash FROM utenti WHERE username = ?", (username,))
-            result = c.fetchone()
-            
-            if result and check_password(password, result[0]):
+        users_df = get_users_df()
+        user_row = users_df[users_df["username"] == username]
+        
+        if not user_row.empty:
+            hashed_password = user_row.iloc[0]["password_hash"]
+            if check_password(password, hashed_password):
                 st.session_state["logged_in"] = True
                 st.session_state["username"] = username
                 st.experimental_rerun()
             else:
                 st.error("Username o password errati.")
-                st.session_state["logged_in"] = False
+        else:
+            st.error("Username o password errati.")
+
 else:
     st.sidebar.success(f"Benvenuto, {st.session_state['username']}!")
     if st.sidebar.button("Logout"):
         st.session_state["logged_in"] = False
         st.experimental_rerun()
 
+    orario_df = carica_orario()
+
     # --- CARICAMENTO ORARIO ---
     st.header("🔄 Carica e Salva Orario")
     uploaded_file = st.file_uploader("Carica un nuovo file .csv (l'orario attuale verrà sovrascritto)", type="csv")
-    orario_df = pd.DataFrame(columns=REQUIRED_COLUMNS)
-
     if uploaded_file:
         df_new = pd.read_csv(uploaded_file)
-        df_new = df_new.loc[:, ~df_new.columns.str.contains('^Unnamed')]
-        if not all(col in df_new.columns for col in REQUIRED_COLUMNS):
-            st.error(f"Il file deve contenere le colonne: {REQUIRED_COLUMNS}")
-        else:
-            orario_df = df_new
-            if salva_orario(orario_df):
-                st.success("Orario caricato e salvato correttamente ✅")
-
-    if orario_df.empty:
-        orario_df = carica_orario()
+        if salva_orario(df_new):
+            st.success("Orario caricato e salvato correttamente ✅")
 
     if not orario_df.empty:
         download_orario(orario_df)
