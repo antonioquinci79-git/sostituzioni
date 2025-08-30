@@ -29,6 +29,8 @@ def carica_orario():
         sheet = client.open(ORARIO_SHEET_NAME).worksheet("orario")
         df = gd.get_as_dataframe(sheet)
         df = df.dropna(how='all')
+        # FIX: Converto esplicitamente la colonna 'Escludi' in booleani
+        df['Escludi'] = df['Escludi'].astype(bool)
         return df
     except Exception as e:
         st.error(f"Errore nel caricamento dell'orario da Google Sheets: {e}")
@@ -222,7 +224,7 @@ elif menu == "Gestione Assenze":
             ]
             
             if assenze.empty:
-                st.info("I docenti selezionati non hanno lezioni in quel giorno.")
+                st.info("I docenti selezionati non hanno lezioni in questo giorno.")
             else:
                 st.subheader("📌 Ore scoperte")
                 st.dataframe(assenze[["Docente", "Ora", "Classe"]].drop_duplicates(), use_container_width=True, hide_index=True)
