@@ -432,4 +432,4 @@ elif menu == "Statistiche":
             if clear_sheet_content("assenze"):
                 st.success("Storico delle assenze eliminato ✅")
         if not conferma_storico and not conferma_assenze:
-            st.warning("Devi spuntare almeno una delle conferme per eliminare i dati
+            st.warning("Devi spuntare almeno una delle conferme per eliminare i dati.")
