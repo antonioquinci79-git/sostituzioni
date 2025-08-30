@@ -330,7 +330,7 @@ elif menu == "Gestione Assenze":
                     
                     proposto = "Nessuno"
                     
-                    # Logica originale per la proposta del sostituto
+                    # Logica corretta: Priorità 1 - Docente di sostegno già nella stessa classe e ora
                     prioritari = orario_df[
                         (orario_df["Giorno"] == giorno_assente) &
                         (orario_df["Ora"] == ora) &
@@ -342,8 +342,10 @@ elif menu == "Gestione Assenze":
                     if not prioritari.empty:
                         proposto = prioritari["Docente"].iloc[0]
                     else:
+                        # Priorità 2 - Altri docenti di sostegno disponibili
                         sostegni_disponibili = orario_df[
-                            (orario_df["Tipo"] == "Sostegno")
+                            (orario_df["Tipo"] == "Sostegno") &
+                            (~orario_df["Escludi"])
                         ]["Docente"].unique()
                         
                         liberi_in_ora = [d for d in orario_df["Docente"].unique() if d not in docenti_occupati_in_ora]
@@ -353,7 +355,16 @@ elif menu == "Gestione Assenze":
                         if candidati:
                             proposto = candidati[0]
                         else:
-                            proposto = "Nessuno"
+                            # Priorità 3 - Altri docenti curriculari disponibili
+                            liberi_curriculari = orario_df[
+                                (orario_df["Tipo"] == "Lezione") &
+                                (~orario_df["Escludi"])
+                            ]["Docente"].unique()
+                            candidati_curriculari = [d for d in liberi_curriculari if d in liberi_in_ora and d != docente_assente]
+                            if candidati_curriculari:
+                                proposto = candidati_curriculari[0]
+                            else:
+                                proposto = "Nessuno"
 
                     sostegni = orario_df[orario_df["Tipo"] == "Sostegno"]["Docente"].unique()
                     opzioni_validi = [d for d in orario_df["Docente"].unique() if d not in docenti_assenti and d not in docenti_occupati_in_ora]
