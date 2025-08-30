@@ -1,9 +1,7 @@
 import streamlit as st
 import pandas as pd
-import sqlite3
 import os
 import re
-import bcrypt
 import gspread
 import gspread_dataframe as gd
 from oauth2client.service_account import ServiceAccountCredentials
@@ -13,7 +11,6 @@ from googleapiclient.discovery import build
 # CONFIGURAZIONE GENERALE
 # =========================
 REQUIRED_COLUMNS = ["Docente", "Giorno", "Ora", "Classe", "Tipo", "Escludi"]
-DB_FILE = "sostituzioni.db"
 
 # =========================
 # FUNZIONI DI SUPPORTO PER GESTIONE DATI
@@ -41,6 +38,7 @@ def salva_orario(df):
     try:
         client = get_gdrive_client()
         ORARIO_SHEET_NAME = "OrarioSostituzioni"
+
         sheet = client.open(ORARIO_SHEET_NAME).worksheet("orario")
         gd.set_with_dataframe(sheet, df)
         return True
@@ -129,109 +127,41 @@ def carica_statistiche():
         return pd.DataFrame(), pd.DataFrame()
 
 # =========================
-# FUNZIONI DI SUPPORTO PER GESTIONE UTENTI (Google Sheets)
-# =========================
-def hash_password(password):
-    hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-    return hashed.decode('utf-8')
-
-def check_password(password, hashed_password):
-    return bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8'))
-
-def get_users_df():
-    try:
-        client = get_gdrive_client()
-        ORARIO_SHEET_NAME = "OrarioSostituzioni"
-        sheet = client.open(ORARIO_SHEET_NAME).worksheet("utenti")
-        df = gd.get_as_dataframe(sheet)
-        df = df.dropna(how='all')
-        if df.empty or 'username' not in df.columns or 'password_hash' not in df.columns:
-            return pd.DataFrame(columns=['username', 'password_hash'])
-        return df
-    except gspread.exceptions.WorksheetNotFound:
-        st.error("Il foglio 'utenti' non è stato trovato. Per favore crealo nel foglio di calcolo.")
-        return pd.DataFrame(columns=['username', 'password_hash'])
-    except Exception as e:
-        st.error(f"Errore nel caricamento degli utenti da Google Sheets: {e}")
-        return pd.DataFrame(columns=['username', 'password_hash'])
-
-def add_user(username, password):
-    try:
-        client = get_gdrive_client()
-        ORARIO_SHEET_NAME = "OrarioSostituzioni"
-        sheet = client.open(ORARIO_SHEET_NAME).worksheet("utenti")
-        hashed_password = hash_password(password)
-        sheet.append_row([username, hashed_password])
-        return True
-    except Exception as e:
-        st.error(f"Errore nell'aggiunta dell'utente: {e}")
-        return False
-
-# =========================
 # LOGICA APPLICAZIONE
 # =========================
 st.title("📚 Gestione orari e Sostituzioni Docenti")
 
-if "logged_in" not in st.session_state:
-    st.session_state["logged_in"] = False
+# --- CARICAMENTO ORARIO ---
+st.header("🔄 Carica e Salva Orario")
+uploaded_file = st.file_uploader("Carica un nuovo file .csv (l'orario attuale verrà sovrascritto)", type="csv")
+orario_df = pd.DataFrame(columns=REQUIRED_COLUMNS)
 
-# Blocco per la schermata di login
-if not st.session_state["logged_in"]:
-    st.sidebar.header("Login")
-    username = st.sidebar.text_input("Username")
-    password = st.sidebar.text_input("Password", type="password")
-
-    # Inizializza l'utente admin se non esiste
-    users_df = get_users_df()
-    if users_df.empty or "admin" not in users_df["username"].values:
-        default_password = st.secrets.get("admin_password", "password_di_default")
-        add_user("admin", default_password)
-        st.info("Utente di default 'admin' creato. Usa la password specificata nel file secrets (o 'password_di_default').")
-
-    if st.sidebar.button("Accedi"):
-        users_df = get_users_df()
-        user_row = users_df[users_df["username"] == username]
-        
-        if not user_row.empty:
-            hashed_password = user_row.iloc[0]["password_hash"]
-            if check_password(password, hashed_password):
-                st.session_state["logged_in"] = True
-                st.session_state["username"] = username
-                st.experimental_rerun()
-            else:
-                st.error("Username o password errati.")
-        else:
-            st.error("Username o password errati.")
-
-else:
-    st.sidebar.success(f"Benvenuto, {st.session_state['username']}!")
-    if st.sidebar.button("Logout"):
-        st.session_state["logged_in"] = False
-        st.experimental_rerun()
-
-    orario_df = carica_orario()
-
-    # --- CARICAMENTO ORARIO ---
-    st.header("🔄 Carica e Salva Orario")
-    uploaded_file = st.file_uploader("Carica un nuovo file .csv (l'orario attuale verrà sovrascritto)", type="csv")
-    if uploaded_file:
-        df_new = pd.read_csv(uploaded_file)
-        if salva_orario(df_new):
+if uploaded_file:
+    df_new = pd.read_csv(uploaded_file)
+    df_new = df_new.loc[:, ~df_new.columns.str.contains('^Unnamed')]
+    if not all(col in df_new.columns for col in REQUIRED_COLUMNS):
+        st.error(f"Il file deve contenere le colonne: {REQUIRED_COLUMNS}")
+    else:
+        orario_df = df_new
+        if salva_orario(orario_df):
             st.success("Orario caricato e salvato correttamente ✅")
 
-    if not orario_df.empty:
-        download_orario(orario_df)
-    
-    # --- VISUALIZZA ORARIO ---
-    st.header("📅 Orario completo")
-    if not orario_df.empty:
-        vista_pivot_docenti(orario_df, mode="classi")
-    
-    # --- GESTIONE ASSENZE E SOSTITUZIONI ---
-    st.header("📝 Gestione Sostituzioni")
+if orario_df.empty:
+    orario_df = carica_orario()
+
+if not orario_df.empty:
+    download_orario(orario_df)
+
+# --- VISUALIZZA ORARIO ---
+st.header("📅 Orario completo")
+if not orario_df.empty:
+    vista_pivot_docenti(orario_df, mode="classi")
+
+# --- GESTIONE ASSENZE E SOSTITUZIONI ---
+st.header("📝 Gestione Sostituzioni")
+if not orario_df.empty:
     docenti = sorted(orario_df["Docente"].unique().tolist())
     giorni = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì"]
-    ore = ["I", "II", "III", "IV", "V", "VI"]
 
     st.subheader("1. Docenti Assenti")
     docenti_assenti = st.multiselect("Seleziona uno o più docenti assenti", docenti)
