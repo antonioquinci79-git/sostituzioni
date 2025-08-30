@@ -1,3 +1,6 @@
 streamlit
 pandas
-sqlite3-binary
+bcrypt
+gspread
+gspread-dataframe
+oauth2client
