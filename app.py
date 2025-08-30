@@ -323,30 +323,26 @@ elif menu == "Gestione Assenze":
                     ora = r["Ora"]
                     docente_assente = r["Docente"]
                     
-                    # 🔹 Trova i docenti già occupati in quell'ora
                     docenti_occupati_in_ora = orario_df[
                         (orario_df["Giorno"] == giorno_assente) &
                         (orario_df["Ora"] == ora)
                     ]["Docente"].tolist()
                     
-                    # 🔹 Proposta iniziale
                     proposto = "Nessuno"
                     
-                    # Logica originale del tuo file
+                    # Logica originale per la proposta del sostituto
                     prioritari = orario_df[
                         (orario_df["Giorno"] == giorno_assente) &
                         (orario_df["Ora"] == ora) &
                         (orario_df["Tipo"] == "Sostegno") &
-                        (orario_df["Classe"] == classe) &
-                        (orario_df["Docente"] != docente_assente)
-                    ]["Docente"].unique()
+                        (orario_df["Classe"] == classe)
+                    ]
                     
-                    if prioritari.size > 0:
-                        proposto = prioritari[0]
+                    if not prioritari.empty:
+                        proposto = prioritari["Docente"].iloc[0]
                     else:
                         sostegni_disponibili = orario_df[
-                            (orario_df["Tipo"] == "Sostegno") &
-                            (~orario_df["Escludi"])
+                            (orario_df["Tipo"] == "Sostegno")
                         ]["Docente"].unique()
                         
                         liberi_in_ora = [d for d in orario_df["Docente"].unique() if d not in docenti_occupati_in_ora]
@@ -366,7 +362,7 @@ elif menu == "Gestione Assenze":
                         opzioni_validi,
                         key=lambda x: (0 if x in sostegni else 1, x)
                     )
-                    
+
                     sostituto_scelto = st.selectbox(
                         f"Sostituto per **{docente_assente}** in **{classe}** alla **{ora}** ora:",
                         options=opzioni,
