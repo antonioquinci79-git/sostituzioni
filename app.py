@@ -56,14 +56,20 @@ def carica_statistiche():
         st.error(f"Errore nel caricamento delle statistiche da Google Sheets: {e}")
         return pd.DataFrame(), pd.DataFrame()
 
-def salva_sostituzione(data, giorno, docente, ore_sostituzione, assenze):
+def salva_sostituzione(data, giorno, sostituzioni, assenze):
     try:
         client = get_gdrive_client()
         storico_sheet = client.open(ORARIO_SHEET_NAME).worksheet("storico")
-        storico_sheet.append_rows([[data, giorno, docente, ore_sostituzione]])
         assenze_sheet = client.open(ORARIO_SHEET_NAME).worksheet("assenze")
-        assenze_data = [[data, giorno, d[0], d[1], d[2]] for d in assenze]
+
+        # Salva sostituzioni
+        storico_data = [[data, giorno, r["Sostituto"], 1] for _, r in sostituzioni.iterrows() if r["Sostituto"] != "Nessuno"]
+        storico_sheet.append_rows(storico_data)
+        
+        # Salva assenze
+        assenze_data = [[data, giorno, r['Docente Assente'], r['Ora'], r['Classe']] for _, r in sostituzioni.iterrows()]
         assenze_sheet.append_rows(assenze_data)
+        
         return True
     except Exception as e:
         st.error(f"Errore nel salvataggio dei dati su Google Sheets: {e}")
@@ -205,42 +211,76 @@ elif menu == "Gestione Assenze":
             "Friday": "Venerdì", "Saturday": "Sabato", "Sunday": "Domenica"
         }
         giorno_assente = traduzione_giorni.get(giorno_assente, giorno_assente)
+        
         if not docenti_assenti:
             st.info("Seleziona almeno un docente per continuare.")
         else:
-            assenze = orario_df[(orario_df["Docente"].isin(docenti_assenti)) & (orario_df["Giorno"] == giorno_assente)]
+            assenze = orario_df[
+                (orario_df["Docente"].isin(docenti_assenti)) & 
+                (orario_df["Giorno"] == giorno_assente) &
+                (~orario_df["Escludi"])
+            ]
+            
             if assenze.empty:
                 st.info("I docenti selezionati non hanno lezioni in quel giorno.")
             else:
                 st.subheader("📌 Ore scoperte")
-                st.dataframe(assenze[["Docente", "Ora", "Classe", "Tipo"]].drop_duplicates(), use_container_width=True, hide_index=True)
+                st.dataframe(assenze[["Docente", "Ora", "Classe"]].drop_duplicates(), use_container_width=True, hide_index=True)
+                
                 sostituzioni = []
-                st.subheader("3. Proponi Sostituzioni")
+                st.subheader("🔄 Proponi Sostituzioni")
+                
+                # 🔹 Cerca i docenti di sostegno
+                docenti_sostegno = orario_df[orario_df["Tipo"] == "Sostegno"]["Docente"].unique().tolist()
+                docenti_curricolari = [d for d in orario_df["Docente"].unique().tolist() if d not in docenti_sostegno]
+                
                 for _, r in assenze.iterrows():
                     classe = r["Classe"]
                     ora = r["Ora"]
                     docente_assente = r["Docente"]
                     tipo_lezione = r["Tipo"]
-                    altri_docenti_liberi = orario_df[
+                    
+                    # 🔹 Trova i docenti già occupati in quell'ora
+                    docenti_occupati = orario_df[
                         (orario_df["Giorno"] == giorno_assente) &
                         (orario_df["Ora"] == ora) &
                         (orario_df["Docente"] != docente_assente)
-                    ].index
-                    docenti_curriculari_disponibili = [d for d in sorted(orario_df["Docente"].unique().tolist()) if d not in orario_df.loc[altri_docenti_liberi, "Docente"].tolist()]
-                    proposta_sostituto = "Da Assegnare"
+                    ]["Docente"].tolist()
+                    
+                    # 🔹 Sostituti disponibili
+                    disponibili = [d for d in orario_df["Docente"].unique().tolist() if d not in docenti_occupati and d not in docenti_assenti]
+                    
+                    # 🔹 Proposta iniziale
+                    proposta_sostituto = "Nessuno"
                     if "Sostegno" in str(tipo_lezione):
-                        sostegno_in_classe = orario_df[
+                        # Priorità 1: Sostegno libero della stessa classe
+                        sostegno_stessa_classe = orario_df[
                             (orario_df["Classe"] == classe) &
                             (orario_df["Tipo"].str.contains("Sostegno", case=False, na=False)) &
-                            (orario_df["Docente"].isin(docenti_curriculari_disponibili))
+                            (orario_df["Docente"].isin(disponibili))
                         ]
-                        if not sostegno_in_classe.empty:
-                            proposta_sostituto = sostegno_in_classe.iloc[0]["Docente"]
+                        if not sostegno_stessa_classe.empty:
+                            proposta_sostituto = sostegno_stessa_classe.iloc[0]["Docente"]
+                        else:
+                            # Priorità 2: Altri docenti di sostegno liberi
+                            altri_sostegno_disponibili = [d for d in docenti_sostegno if d in disponibili]
+                            if altri_sostegno_disponibili:
+                                proposta_sostituto = altri_sostegno_disponibili[0]
+                    else:
+                        # Priorità 3: Docenti curricolari liberi
+                        curricolari_disponibili = [d for d in docenti_curricolari if d in disponibili]
+                        if curricolari_disponibili:
+                            proposta_sostituto = curricolari_disponibili[0]
+                            
+                    opzioni_sostituto = ["Nessuno"] + sorted(disponibili)
+                    
                     sostituto_scelto = st.selectbox(
-                        f"Sostituzione per **{docente_assente}** in **{classe}** alla **{ora}** ora:",
-                        options=["Da Assegnare"] + docenti_curriculari_disponibili,
-                        index=0 if "Da Assegnare" not in docenti_curriculari_disponibili else docenti_curriculari_disponibili.index(proposta_sostituto) + 1 if proposta_sostituto in docenti_curriculari_disponibili else 0
+                        f"Sostituto per **{docente_assente}** in **{classe}** alla **{ora}** ora:",
+                        options=opzioni_sostituto,
+                        index=opzioni_sostituto.index(proposta_sostituto) if proposta_sostituto in opzioni_sostituto else 0,
+                        key=f"select_{docente_assente}_{classe}_{ora}"
                     )
+                    
                     sostituzioni.append({
                         "Docente Assente": docente_assente,
                         "Classe": classe,
@@ -248,9 +288,11 @@ elif menu == "Gestione Assenze":
                         "Sostituto": sostituto_scelto
                     })
 
-                if st.button("Conferma Sostituzioni"):
-                    if salva_sostituzione(pd.Timestamp.now().strftime("%Y-%m-%d"), giorno_assente, docenti_assenti[0], len(assenze), assenze[["Docente", "Ora", "Classe"]].values.tolist()):
-                        st.success("Sostituzioni salvate con successo!")
+                sostituzioni_df = pd.DataFrame(sostituzioni)
+
+                if st.button("Conferma e salva sostituzioni"):
+                    if salva_sostituzione(pd.Timestamp.now().strftime("%Y-%m-%d"), giorno_assente, sostituzioni_df, assenze):
+                        st.success("Sostituzioni salvate con successo su Google Sheets! ✅")
 
 # --- VISUALIZZA ORARIO ---
 elif menu == "Visualizza Orario":
