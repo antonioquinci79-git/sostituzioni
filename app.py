@@ -29,8 +29,13 @@ def carica_orario():
         sheet = client.open(ORARIO_SHEET_NAME).worksheet("orario")
         df = gd.get_as_dataframe(sheet)
         df = df.dropna(how='all')
-        # FIX: Converto esplicitamente la colonna 'Escludi' in booleani
+        # Pulisco e converto i tipi di colonna per maggiore robustezza
         df['Escludi'] = df['Escludi'].astype(bool)
+        df['Tipo'] = df['Tipo'].astype(str).str.strip()
+        df['Docente'] = df['Docente'].astype(str).str.strip()
+        df['Giorno'] = df['Giorno'].astype(str).str.strip()
+        df['Ora'] = df['Ora'].astype(str).str.strip()
+        df['Classe'] = df['Classe'].astype(str).str.strip()
         return df
     except Exception as e:
         st.error(f"Errore nel caricamento dell'orario da Google Sheets: {e}")
@@ -63,7 +68,7 @@ def salva_sostituzione(data, giorno, sostituzioni, assenze):
         client = get_gdrive_client()
         storico_sheet = client.open(ORARIO_SHEET_NAME).worksheet("storico")
         assenze_sheet = client.open(ORARIO_SHEET_NAME).worksheet("assenze")
-
+        
         # Salva sostituzioni
         storico_data = [[data, giorno, r["Sostituto"], 1] for _, r in sostituzioni.iterrows() if r["Sostituto"] != "Nessuno"]
         storico_sheet.append_rows(storico_data)
