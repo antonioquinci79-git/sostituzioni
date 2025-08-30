@@ -326,15 +326,17 @@ elif menu == "Gestione Assenze":
                     docenti_occupati_in_ora = orario_df[
                         (orario_df["Giorno"] == giorno_assente) &
                         (orario_df["Ora"] == ora)
-                    ]["Docente"].tolist()
+                    ]["Docente"].unique()
                     
                     proposto = "Nessuno"
                     
+                    # Logica originale per la proposta del sostituto
                     prioritari = orario_df[
                         (orario_df["Giorno"] == giorno_assente) &
                         (orario_df["Ora"] == ora) &
                         (orario_df["Tipo"] == "Sostegno") &
-                        (orario_df["Classe"] == classe)
+                        (orario_df["Classe"] == classe) &
+                        (orario_df["Docente"] != docente_assente)
                     ]
                     
                     if not prioritari.empty:
@@ -393,8 +395,14 @@ elif menu == "Gestione Assenze":
                 data_estesa = f"{giorno_assente} {giorno_num} {mese_nome} {anno}"
                 
                 testo = f"Sostituzioni per {data_estesa}:\n\n"
-                for _, row in sostituzioni_df.iterrows():
-                    testo += f"• Classe {row['Classe']} – {row['Ora']} ora (assente: {row['Docente Assente']}) → {row['Sostituto']}\n"
+                
+                for docente in docenti_assenti:
+                    ore_assenti_docente = sostituzioni_df[sostituzioni_df['Docente Assente'] == docente]
+                    if not ore_assenti_docente.empty:
+                        testo += f"Assente: {docente}\n"
+                        for _, row in ore_assenti_docente.iterrows():
+                            testo += f"• {row['Ora']} ora (classe {row['Classe']}) → {row['Sostituto']}\n"
+                        testo += "\n"
                 
                 st.text_area(
                     "Modifica qui il messaggio prima di copiarlo:",
