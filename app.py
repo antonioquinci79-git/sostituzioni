@@ -61,7 +61,6 @@ def carica_statistiche():
         assenze_sheet = client.open(ORARIO_SHEET_NAME).worksheet("assenze")
         df_assenze = gd.get_as_dataframe(assenze_sheet)
         
-        # Pulizia dei dati
         if not df_storico.empty:
             df_storico['data'] = pd.to_datetime(df_storico['data'])
             df_storico['data'] = df_storico['data'].dt.strftime('%Y-%m-%d')
@@ -82,7 +81,6 @@ def salva_storico_assenze(data_sostituzione, giorno_assente, sostituzioni_df, or
         storico_sheet = client.open(ORARIO_SHEET_NAME).worksheet("storico")
         assenze_sheet = client.open(ORARIO_SHEET_NAME).worksheet("assenze")
         
-        # Salva sostituzioni
         storico_data = [[
             str(data_sostituzione),
             giorno_assente,
@@ -93,11 +91,10 @@ def salva_storico_assenze(data_sostituzione, giorno_assente, sostituzioni_df, or
         if storico_data:
             storico_sheet.append_rows(storico_data)
         
-        # Salva assenze
         assenze_data = [[
             str(data_sostituzione),
             giorno_assente,
-            row["Docente"],
+            row["Docente Assente"],
             row["Ora"],
             row["Classe"]
         ] for _, row in ore_assenti.iterrows()]
@@ -115,7 +112,6 @@ def clear_sheet_content(sheet_name):
         client = get_gdrive_client()
         sheet = client.open(ORARIO_SHEET_NAME).worksheet(sheet_name)
         sheet.clear()
-        # Riscrittura dell'intestazione per evitare che Streamlit la cancelli
         if sheet_name == "storico":
             sheet.append_row(["data", "giorno", "docente", "ore"])
         elif sheet_name == "assenze":
@@ -321,38 +317,39 @@ elif menu == "Gestione Assenze":
                 
                 sostituzioni_proposte = []
                 st.subheader("🔄 Proponi Sostituzioni")
-
-                docenti_disponibili_generali = orario_df["Docente"].unique()
                 
                 for _, r in ore_assenti.iterrows():
                     classe = r["Classe"]
                     ora = r["Ora"]
                     docente_assente = r["Docente"]
-                    tipo_lezione = r["Tipo"]
                     
+                    # 🔹 Trova i docenti già occupati in quell'ora
                     docenti_occupati_in_ora = orario_df[
                         (orario_df["Giorno"] == giorno_assente) &
                         (orario_df["Ora"] == ora)
                     ]["Docente"].tolist()
-
-                    liberi_in_ora = [d for d in docenti_disponibili_generali if d not in docenti_occupati_in_ora]
                     
+                    # 🔹 Proposta iniziale
                     proposto = "Nessuno"
                     
-                    # 🔹 Logica originale per la proposta
+                    # Logica originale del tuo file
                     prioritari = orario_df[
                         (orario_df["Giorno"] == giorno_assente) &
                         (orario_df["Ora"] == ora) &
                         (orario_df["Tipo"] == "Sostegno") &
-                        (orario_df["Classe"] == classe)
-                    ]
+                        (orario_df["Classe"] == classe) &
+                        (orario_df["Docente"] != docente_assente)
+                    ]["Docente"].unique()
                     
-                    if not prioritari.empty:
-                        proposto = prioritari["Docente"].iloc[0]
+                    if prioritari.size > 0:
+                        proposto = prioritari[0]
                     else:
                         sostegni_disponibili = orario_df[
-                            (orario_df["Tipo"] == "Sostegno")
+                            (orario_df["Tipo"] == "Sostegno") &
+                            (~orario_df["Escludi"])
                         ]["Docente"].unique()
+                        
+                        liberi_in_ora = [d for d in orario_df["Docente"].unique() if d not in docenti_occupati_in_ora]
                         
                         candidati = [d for d in sostegni_disponibili if d in liberi_in_ora and d != docente_assente]
                         
@@ -361,12 +358,19 @@ elif menu == "Gestione Assenze":
                         else:
                             proposto = "Nessuno"
 
-                    opzioni_sostituto = ["Nessuno"] + sorted(liberi_in_ora)
+                    # Costruisci opzioni con prefisso [S] per i sostegni
+                    sostegni = orario_df[orario_df["Tipo"] == "Sostegno"]["Docente"].unique()
+                    opzioni_validi = [d for d in orario_df["Docente"].unique() if d not in docenti_assenti and d not in docenti_occupati_in_ora]
+                    
+                    opzioni = ["Nessuno"] + sorted(
+                        opzioni_validi,
+                        key=lambda x: (0 if x in sostegni else 1, x)
+                    )
                     
                     sostituto_scelto = st.selectbox(
                         f"Sostituto per **{docente_assente}** in **{classe}** alla **{ora}** ora:",
-                        options=opzioni_sostituto,
-                        index=opzioni_sostituto.index(proposto) if proposto in opzioni_sostituto else 0,
+                        options=opzioni,
+                        index=opzioni.index(proposto) if proposto in opzioni else 0,
                         key=f"select_{docente_assente}_{classe}_{ora}"
                     )
                     
@@ -400,15 +404,19 @@ elif menu == "Statistiche":
     
     if not df_storico.empty:
         st.subheader("Statistiche Sostituzioni")
-        st.dataframe(df_storico, use_container_width=True, hide_index=True)
-        st.bar_chart(df_storico.groupby("docente")["ore"].sum())
+        df_storico_agg = df_storico.groupby("docente")["ore"].sum().reset_index()
+        df_storico_agg = df_storico_agg.rename(columns={"ore": "Totale Ore Sostituite"})
+        st.dataframe(df_storico_agg, use_container_width=True, hide_index=True)
+        st.bar_chart(df_storico_agg, x="docente", y="Totale Ore Sostituite")
     else:
         st.info("Nessuna sostituzione registrata.")
 
     if not df_assenze.empty:
         st.subheader("Statistiche Assenze")
-        st.dataframe(df_assenze, use_container_width=True, hide_index=True)
-        st.bar_chart(df_assenze.groupby("docente")["totale_ore_assenti"].sum())
+        df_assenze_agg = df_assenze.groupby("docente")["ora"].count().reset_index()
+        df_assenze_agg = df_assenze_agg.rename(columns={"ora": "Totale Ore Assenti"})
+        st.dataframe(df_assenze_agg, use_container_width=True, hide_index=True)
+        st.bar_chart(df_assenze_agg, x="docente", y="Totale Ore Assenti")
     else:
         st.info("Nessuna assenza registrata.")
         
@@ -424,4 +432,4 @@ elif menu == "Statistiche":
             if clear_sheet_content("assenze"):
                 st.success("Storico delle assenze eliminato ✅")
         if not conferma_storico and not conferma_assenze:
-            st.warning("Devi spuntare almeno una delle conferme per eliminare i dati.")
+            st.warning("Devi spuntare almeno una delle conferme per eliminare i dati
