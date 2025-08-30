@@ -330,7 +330,6 @@ elif menu == "Gestione Assenze":
                     
                     proposto = "Nessuno"
                     
-                    # Logica originale per la proposta del sostituto
                     prioritari = orario_df[
                         (orario_df["Giorno"] == giorno_assente) &
                         (orario_df["Ora"] == ora) &
@@ -354,7 +353,6 @@ elif menu == "Gestione Assenze":
                         else:
                             proposto = "Nessuno"
 
-                    # Costruisci opzioni con prefisso [S] per i sostegni
                     sostegni = orario_df[orario_df["Tipo"] == "Sostegno"]["Docente"].unique()
                     opzioni_validi = [d for d in orario_df["Docente"].unique() if d not in docenti_assenti and d not in docenti_occupati_in_ora]
                     
@@ -379,6 +377,31 @@ elif menu == "Gestione Assenze":
 
                 sostituzioni_df = pd.DataFrame(sostituzioni_proposte)
                 st.dataframe(sostituzioni_df, use_container_width=True, hide_index=True)
+                
+                # --- Generazione testo per WhatsApp ---
+                st.subheader("📤 Testo per WhatsApp (copia e modifica)")
+                
+                mesi_it = {
+                    1: "Gennaio", 2: "Febbraio", 3: "Marzo", 4: "Aprile",
+                    5: "Maggio", 6: "Giugno", 7: "Luglio", 8: "Agosto",
+                    9: "Settembre", 10: "Ottobre", 11: "Novembre", 12: "Dicembre"
+                }
+
+                giorno_num = data_sostituzione.day
+                mese_nome = mesi_it[data_sostituzione.month]
+                anno = data_sostituzione.year
+                data_estesa = f"{giorno_assente} {giorno_num} {mese_nome} {anno}"
+                
+                testo = f"Sostituzioni per {data_estesa}:\n\n"
+                for _, row in sostituzioni_df.iterrows():
+                    testo += f"• Classe {row['Classe']} – {row['Ora']} ora (assente: {row['Docente Assente']}) → {row['Sostituto']}\n"
+                
+                st.text_area(
+                    "Modifica qui il messaggio prima di copiarlo:",
+                    testo.strip(),
+                    height=200,
+                    key="whatsapp_text_area"
+                )
 
                 if st.button("Conferma e salva sostituzioni"):
                     if salva_storico_assenze(data_sostituzione, giorno_assente, sostituzioni_df, ore_assenti):
