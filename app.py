@@ -5,6 +5,7 @@ import re
 import gspread
 import gspread_dataframe as gd
 from oauth2client.service_account import ServiceAccountCredentials
+from datetime import datetime
 
 # =========================
 # CONFIGURAZIONE FILE / SHEETS
@@ -187,6 +188,21 @@ def clear_sheet_content(sheet_name):
     except Exception as e:
         st.error(f"Errore nell'azzeramento del foglio {sheet_name}: {e}")
         return False
+
+# =========================
+# FUNZIONE PER IL BACKUP
+# =========================
+def create_backup():
+    try:
+        client = get_gdrive_client()
+        source_sheet = client.open(SPREADSHEET_NAME)
+        timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+        backup_name = f"{SPREADSHEET_NAME}_backup_{timestamp}"
+        source_sheet.duplicate(backup_name)
+        return backup_name
+    except Exception as e:
+        st.error(f"Errore durante la creazione del backup: {e}")
+        return None
 
 # =========================
 # UTILITA' PER DOWNLOAD e PIVOT
@@ -675,3 +691,11 @@ elif menu == "Statistiche":
                 st.success("Storico delle assenze eliminato ✅")
         else:
             st.warning("Devi spuntare la conferma prima di cancellare lo storico delle assenze.")
+
+    st.subheader("Cloud Backup")
+    st.info("Crea una copia di backup del tuo foglio di calcolo su Google Drive.")
+    if st.button("Crea Backup"):
+        with st.spinner("Creazione backup in corso..."):
+            backup_name = create_backup()
+            if backup_name:
+                st.success(f"Backup creato con successo! Il nuovo foglio si chiama: '{backup_name}'")
