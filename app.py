@@ -19,6 +19,7 @@ ASSENZE_SHEET = "assenze"
 # =========================
 # CLIENT GOOGLE DRIVE
 # =========================
+@st.cache_resource
 def get_gdrive_client():
     gdrive_credentials = st.secrets["gdrive"]
     scope = [
