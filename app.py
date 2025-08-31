@@ -604,9 +604,20 @@ elif menu == "Gestione Assenze":
                 data_estesa = f"{giorno_assente} {giorno_num} {mese_nome} {anno}"
 
                 testo = f"Sostituzioni per {data_estesa}:\n\n"
-                for _, row in edited_df_sorted.iterrows():
-                    testo += f"• Classe {row['Classe']} – {row['Ora']} ora (assente: {row['Assente']}) → {row['Sostituto']}\n"
+                
+                # Aggiungi un'intestazione per le ore scoperte
+                ore_scoperte_text = ""
+                for _, row in ore_assenti.iterrows():
+                    ore_scoperte_text += f"• Assenza: **{row['Docente']}** ({row['Ora']} ora - Classe {row['Classe']})\n"
 
+                if ore_scoperte_text:
+                    testo += "📌 *Ore Scoperte:*\n" + ore_scoperte_text + "\n"
+
+                # Aggiungi un'intestazione per le sostituzioni
+                testo += "🔄 *Sostituzioni Assegnate:*\n"
+                for _, row in edited_df_sorted.iterrows():
+                    testo += f"• **{row['Sostituto']}** sostituisce **{row['Assente']}** alla {row['Ora']} ora in {row['Classe']}\n"
+                
                 st.subheader("📤 Testo per WhatsApp (copia e modifica)")
                 st.text_area(
                     "Modifica qui il messaggio prima di copiarlo:",
