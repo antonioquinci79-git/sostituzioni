@@ -578,33 +578,33 @@ if st.button("✅ Conferma tabella (non salva ancora)"):
             st.write(f"- Ora {ora}: {', '.join(docs)}")
         st.stop()
 
-    # Salviamo in sessione per il passaggio successivo
+    # Memorizza tutto in sessione per lo Step 2
     st.session_state["sostituzioni_confermate"] = edited_df_sorted.copy()
     st.session_state["ore_assenti_confermate"] = ore_assenti.copy()
     st.session_state["data_sostituzione_tmp"] = data_sostituzione
     st.session_state["giorno_assente_tmp"] = giorno_assente
+
     st.success("Tabella confermata ✅ Ora puoi salvarla nello storico.")
 
-    # --- Step 2: Salva nello storico (subito sotto la conferma) ---
-    if st.button("💾 Salva nello storico"):
+# --- Step 2: Salva nello storico (appare dopo la conferma, non in sidebar) ---
+if st.session_state.get("sostituzioni_confermate") is not None:
+    if st.button("💾 Salva nello storico", key="save_storico_main"):
         sost_df = st.session_state.get("sostituzioni_confermate")
         ore_assenti_session = st.session_state.get("ore_assenti_confermate")
         data_tmp = st.session_state.get("data_sostituzione_tmp")
         giorno_tmp = st.session_state.get("giorno_assente_tmp")
 
         if sost_df is not None and ore_assenti_session is not None:
-            # salvataggio finale su Google Sheets
             if salva_storico_assenze(data_tmp, giorno_tmp, sost_df, ore_assenti_session):
                 st.success("Assenze e sostituzioni salvate nello storico ✅")
-                # pulizia sessione
-                for k in [
-                    "sostituzioni_confermate",
-                    "ore_assenti_confermate",
-                    "data_sostituzione_tmp",
-                    "giorno_assente_tmp"
-                ]:
-                    if k in st.session_state:
-                        del st.session_state[k]
+                # pulizia sessione e refresh UI
+                for k in ["sostituzioni_confermate", "ore_assenti_confermate", "data_sostituzione_tmp", "giorno_assente_tmp"]:
+                    st.session_state.pop(k, None)
+                try:
+                    st.rerun()
+                except Exception:
+                    pass
+
 
 
 # --- VISUALIZZA ORARIO ---
