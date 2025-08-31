@@ -568,49 +568,49 @@ elif menu == "Gestione Assenze":
                     key="whatsapp_text_area"
                 )
 
-# --- Step 1: conferma tabella (non salva ancora) ---
-if st.button("✅ Conferma tabella (non salva ancora)"):
-    # Controllo conflitti: stesso docente in più classi nella stessa ora
-    conflitti = []
-    for ora in edited_df_sorted["Ora"].unique():
-        assegnazioni = edited_df_sorted[edited_df_sorted["Ora"] == ora]
-        sostituti = [s for s in assegnazioni["Sostituto"] if s != "Nessuno"]
-        duplicati = [s for s in sostituti if sostituti.count(s) > 1]
-        if duplicati:
-            conflitti.append((ora, list(set(duplicati))))
+                # --- Step 1: conferma tabella (non salva ancora) ---
+                if st.button("✅ Conferma tabella (non salva ancora)"):
+                    # Controllo conflitti: stesso docente in più classi nella stessa ora
+                    conflitti = []
+                for ora in edited_df_sorted["Ora"].unique():
+                    assegnazioni = edited_df_sorted[edited_df_sorted["Ora"] == ora]
+                    sostituti = [s for s in assegnazioni["Sostituto"] if s != "Nessuno"]
+                    duplicati = [s for s in sostituti if sostituti.count(s) > 1]
+                if duplicati:
+                conflitti.append((ora, list(set(duplicati))))
 
-    if conflitti:
-        st.error("⚠️ Errore: lo stesso docente è stato assegnato a più classi nella stessa ora:")
-        for ora, docs in conflitti:
-            st.write(f"- Ora {ora}: {', '.join(docs)}")
-        st.stop()
+                if conflitti:
+                st.error("⚠️ Errore: lo stesso docente è stato assegnato a più classi nella stessa ora:")
+                for ora, docs in conflitti:
+                    st.write(f"- Ora {ora}: {', '.join(docs)}")
+                st.stop()
 
-    # Memorizza tutto in sessione per lo Step 2
-    st.session_state["sostituzioni_confermate"] = edited_df_sorted.copy()
-    st.session_state["ore_assenti_confermate"] = ore_assenti.copy()
-    st.session_state["data_sostituzione_tmp"] = data_sostituzione
-    st.session_state["giorno_assente_tmp"] = giorno_assente
+                # Memorizza tutto in sessione per lo Step 2
+                st.session_state["sostituzioni_confermate"] = edited_df_sorted.copy()
+                st.session_state["ore_assenti_confermate"] = ore_assenti.copy()
+                st.session_state["data_sostituzione_tmp"] = data_sostituzione
+                st.session_state["giorno_assente_tmp"] = giorno_assente
 
-    st.success("Tabella confermata ✅ Ora puoi salvarla nello storico.")
+                st.success("Tabella confermata ✅ Ora puoi salvarla nello storico.")
 
-# --- Step 2: Salva nello storico (appare dopo la conferma, non in sidebar) ---
-if st.session_state.get("sostituzioni_confermate") is not None:
-    if st.button("💾 Salva nello storico", key="save_storico_main"):
-        sost_df = st.session_state.get("sostituzioni_confermate")
-        ore_assenti_session = st.session_state.get("ore_assenti_confermate")
-        data_tmp = st.session_state.get("data_sostituzione_tmp")
-        giorno_tmp = st.session_state.get("giorno_assente_tmp")
+                # --- Step 2: Salva nello storico (appare dopo la conferma, non in sidebar) ---
+                if st.session_state.get("sostituzioni_confermate") is not None:
+                    if st.button("💾 Salva nello storico", key="save_storico_main"):
+                    sost_df = st.session_state.get("sostituzioni_confermate")
+                    ore_assenti_session = st.session_state.get("ore_assenti_confermate")
+                    data_tmp = st.session_state.get("data_sostituzione_tmp")
+                    giorno_tmp = st.session_state.get("giorno_assente_tmp")
 
-        if sost_df is not None and ore_assenti_session is not None:
-            if salva_storico_assenze(data_tmp, giorno_tmp, sost_df, ore_assenti_session):
-                st.success("Assenze e sostituzioni salvate nello storico ✅")
-                # pulizia sessione e refresh UI
-                for k in ["sostituzioni_confermate", "ore_assenti_confermate", "data_sostituzione_tmp", "giorno_assente_tmp"]:
+                if sost_df is not None and ore_assenti_session is not None:
+                    if salva_storico_assenze(data_tmp, giorno_tmp, sost_df, ore_assenti_session):
+                        st.success("Assenze e sostituzioni salvate nello storico ✅")
+                        # pulizia sessione e refresh UI
+                    for k in ["sostituzioni_confermate", "ore_assenti_confermate", "data_sostituzione_tmp", "giorno_assente_tmp"]:
                     st.session_state.pop(k, None)
-                try:
-                    st.rerun()
-                except Exception:
-                    pass
+                    try:
+                        st.rerun()
+                    except Exception:
+                        pass
 
 
 
