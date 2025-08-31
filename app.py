@@ -604,13 +604,13 @@ elif menu == "Gestione Assenze":
                 data_estesa = f"{giorno_assente} {giorno_num} {mese_nome} {anno}"
 
                 testo = "Buongiorno, supplenze.\n"
-                testo += f"📌 *{data_estesa.upper()}*\n\n"
+                testo += f"📌 {data_estesa.upper()}\n\n"
                 
                 # Genera il testo delle sostituzioni
                 for _, row in edited_df_sorted.iterrows():
                     # Solo se c'è un sostituto
                     if row["Sostituto"] and row["Sostituto"] != "Nessuno":
-                        testo += f"• *{row['Ora']} ORA* - **{row['Classe']}** - {row['Assente']} 🔄 **{row['Sostituto']}**\n"
+                        testo += f"• {row['Ora']} ORA - *{row['Classe']}* \n {row['Assente']} 🔄 *{row['Sostituto']}*\n"
 
                 st.subheader("📤 Testo per WhatsApp (copia e modifica)")
                 st.text_area(
