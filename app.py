@@ -121,12 +121,13 @@ def carica_statistiche():
             if "data" in df_storico.columns:
                 df_storico["data"] = pd.to_datetime(df_storico["data"], errors="coerce")
                 df_storico["data"] = df_storico["data"].dt.strftime("%Y-%m-%d")
-            # --- AGGIUNTA PER LA CONVERSIONE NUMERICA ---
+
             if "ore" in df_storico.columns:
                 df_storico["ore"] = pd.to_numeric(df_storico["ore"], errors="coerce").fillna(0).astype(int)
-            for c in ["docente", "giorno", "ore"]:
+
+            for c in ["docente", "giorno"]:
                 if c in df_storico.columns:
-                    df_storico[c] = df_storico[c].astype(str).str.strip()
+                    df_storico[c] = df_storico[c].astype(str).str.strip().str.lower()
         if not df_assenze.empty:
             if "data" in df_assenze.columns:
                 df_assenze["data"] = pd.to_datetime(df_assenze["data"], errors="coerce")
