@@ -577,7 +577,7 @@ elif menu == "Gestione Assenze":
                     sostituti = [s for s in assegnazioni["Sostituto"] if s != "Nessuno"]
                     duplicati = [s for s in sostituti if sostituti.count(s) > 1]
                 if duplicati:
-                conflitti.append((ora, list(set(duplicati))))
+                    conflitti.append((ora, list(set(duplicati))))
 
                 if conflitti:
                 st.error("⚠️ Errore: lo stesso docente è stato assegnato a più classi nella stessa ora:")
