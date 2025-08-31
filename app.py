@@ -370,6 +370,8 @@ if menu == "Inserisci/Modifica Orario":
                 st.success("Orario modificato e salvato su Google Sheets ✅")
     download_orario(orario_df)
 
+# ... (codice precedente) ...
+
 # --- GESTIONE ASSENZE ---
 elif menu == "Gestione Assenze":
     st.header("🚨 Gestione Assenze")
@@ -430,46 +432,40 @@ elif menu == "Gestione Assenze":
                     presenti_ora = orario_df[
                         (orario_df["Giorno"] == giorno_assente) &
                         (orario_df["Ora"] == row["Ora"])
-                    ]["Docente"].unique()
-
-                    occupati_curr = orario_df[
-                        (orario_df["Giorno"] == giorno_assente) &
-                        (orario_df["Ora"] == row["Ora"]) &
-                        (orario_df["Tipo"] != "Sostegno")
-                    ]["Docente"].unique()
-
-                    # liberi: presenti in orario per quell'ora ma non occupati_curr, non assenti e non con *
-                    liberi = [
-                        d for d in presenti_ora
-                        if d not in occupati_curr
-                        and d not in docenti_assenti
-                        and "*" not in d
                     ]
 
-                    # Priorità: stesso sostegno di quella classe e ora
-                    prioritari = orario_df[
-                        (orario_df["Giorno"] == giorno_assente) &
-                        (orario_df["Ora"] == row["Ora"]) &
-                        (orario_df["Tipo"] == "Sostegno") &
-                        (orario_df["Classe"] == row["Classe"]) &
-                        (~orario_df["Docente"].str.contains('\*', regex=True, na=False))
+                    # Docenti disponibili (non assenti, e non "Escludi")
+                    docenti_disponibili = presenti_ora[
+                        (~presenti_ora["Docente"].isin(docenti_assenti)) &
+                        (~presenti_ora["Escludi"])
                     ]
-                    if not prioritari.empty:
-                        proposto = prioritari["Docente"].iloc[0]
-                    else:
-                        sostegni_disponibili = orario_df[
-                            (orario_df["Giorno"] == giorno_assente) &
-                            (orario_df["Ora"] == row["Ora"]) &
-                            (orario_df["Tipo"] == "Sostegno") &
-                            (~orario_df["Docente"].str.contains('\*', regex=True, na=False))
-                        ]["Docente"].unique()
 
-                        candidati = [d for d in sostegni_disponibili if d in liberi]
+                    # Docenti "Escludi" disponibili (non assenti)
+                    docenti_esclusi = presenti_ora[
+                        (~presenti_ora["Docente"].isin(docenti_assenti)) &
+                        (presenti_ora["Escludi"])
+                    ]
 
-                        if candidati:
-                            proposto = candidati[0]
+                    # Logica di proposta
+                    proposto = "Nessuno"
+                    if not docenti_disponibili.empty:
+                        # Priorità: stesso sostegno di quella classe e ora
+                        prioritari = docenti_disponibili[
+                            (docenti_disponibili["Tipo"] == "Sostegno") &
+                            (docenti_disponibili["Classe"] == row["Classe"])
+                        ]
+                        if not prioritari.empty:
+                            proposto = prioritari["Docente"].iloc[0]
                         else:
-                            proposto = "Nessuno"
+                            # Altrimenti, il primo disponibile che non sia di sostegno
+                            non_sostegno = docenti_disponibili[docenti_disponibili["Tipo"] != "Sostegno"]
+                            if not non_sostegno.empty:
+                                proposto = non_sostegno["Docente"].iloc[0]
+                            else:
+                                # Se non ci sono altri, valuta i docenti esclusi
+                                esclusi_ordinati = docenti_esclusi.sort_values("Docente")
+                                if not esclusi_ordinati.empty:
+                                    proposto = esclusi_ordinati["Docente"].iloc[0]
 
                     sostituzioni.append({
                         "Ora": row["Ora"],
@@ -500,25 +496,34 @@ elif menu == "Gestione Assenze":
                     # Costruisci opzioni con prefisso [S] per i sostegni
                     opzioni_validi = []
                     for d in presenti_ora:
-                        if d not in docenti_assenti and "*" not in d:
+                        # Rimuoviamo il controllo sull'asterisco
+                        if d not in docenti_assenti and not orario_df.loc[orario_df["Docente"] == d, "Escludi"].any():
                             if d in sostegni:
                                 opzioni_validi.append(f"[S] {d}")
                             else:
                                 opzioni_validi.append(d)
-
+                    
+                    # Aggiungi docenti "Escludi" in fondo alla lista
+                    docenti_esclusi_per_ora = orario_df[
+                        (orario_df["Giorno"] == giorno_assente) &
+                        (orario_df["Ora"] == riga["Ora"]) &
+                        (orario_df["Escludi"])
+                    ]["Docente"].unique()
+                    
+                    opzioni_esclusi = [d for d in docenti_esclusi_per_ora if d not in docenti_assenti]
+                    
                     # Metti i sostegni in cima
                     opzioni = ["Nessuno"] + sorted(
                         opzioni_validi,
                         key=lambda x: (0 if x.startswith("[S]") else 1, x)
-                    )
+                    ) + sorted(opzioni_esclusi)
 
                     # Mantieni coerenza con la proposta iniziale (aggiungendo [S] se serve)
                     proposto = riga["Sostituto"]
+                    proposto_display = proposto
                     if proposto in sostegni:
                         proposto_display = f"[S] {proposto}"
-                    else:
-                        proposto_display = proposto
-
+                    
                     scelta = st.selectbox(
                         f"Sostituto per {riga['Ora']} ora - Classe {riga['Classe']} (assente {riga['Assente']})",
                         opzioni,
@@ -608,7 +613,6 @@ elif menu == "Gestione Assenze":
                                     st.rerun()
                                 except Exception:
                                     pass
-
 
 
 # --- VISUALIZZA ORARIO ---
