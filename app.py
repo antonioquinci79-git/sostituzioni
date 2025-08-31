@@ -627,17 +627,15 @@ elif menu == "Statistiche":
     if df_storico.empty:
         st.info("Nessuna statistica disponibile. Registra prima delle sostituzioni.")
     else:
-        st.dataframe(df_storico, use_container_width=True, hide_index=True)
-        # barra: somma ore per docente
-        try:
-            df_sum = df_storico.groupby("docente")["ore"].sum().reset_index()
-            df_sum = df_sum.rename(columns={"ore": "Totale Ore Sostituite"})
-            st.bar_chart(df_sum.set_index("docente"))
-        except Exception:
-            # se 'ore' non numerico, proviamo a convertire
-            df_storico["ore"] = pd.to_numeric(df_storico["ore"], errors="coerce").fillna(0)
-            df_sum = df_storico.groupby("docente")["ore"].sum().reset_index().rename(columns={"ore": "Totale Ore Sostituite"})
-            st.bar_chart(df_sum.set_index("docente"))
+        # Crea il DataFrame aggregato per la tabella e per il grafico
+        df_sum = df_storico.groupby("docente")["ore"].sum().reset_index()
+        df_sum = df_sum.rename(columns={"ore": "Totale Ore Sostituite"})
+
+        # Mostra la tabella con i dati aggregati
+        st.dataframe(df_sum, use_container_width=True, hide_index=True)
+
+        # Mostra il grafico a barre
+        st.bar_chart(df_sum.set_index("docente"))
 
     st.subheader("⚠️ Azzeramento storico sostituzioni")
     conferma = st.checkbox("Confermo di voler cancellare definitivamente lo storico delle sostituzioni", key="conf_storico")
