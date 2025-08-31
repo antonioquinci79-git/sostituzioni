@@ -619,6 +619,10 @@ elif menu == "Gestione Assenze":
                     height=200,
                     key="whatsapp_text_area"
                 )
+                # Nuovo pulsante "Copia Testo"
+                if st.button("📋 Copia Testo"):
+                    st.session_state.clipboard = testo.strip()
+                    st.success("Testo copiato negli appunti! Ora puoi incollarlo su WhatsApp.")
 
                 # --- Step 1: conferma tabella (non salva ancora) ---
                 if st.button("✅ Conferma tabella (non salva ancora)"):
