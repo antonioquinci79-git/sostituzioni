@@ -190,7 +190,7 @@ def clear_sheet_content(sheet_name):
         return False
 
 # =========================
-# FUNZIONE PER IL BACKUP
+# FUNZIONE PER IL BACKUP CORRETTA
 # =========================
 def create_backup():
     try:
@@ -198,7 +198,10 @@ def create_backup():
         source_sheet = client.open(SPREADSHEET_NAME)
         timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         backup_name = f"{SPREADSHEET_NAME}_backup_{timestamp}"
-        source_sheet.duplicate(backup_name)
+        
+        # Uso client.copy() al posto di sh.duplicate()
+        client.copy(source_sheet.id, title=backup_name)
+        
         return backup_name
     except Exception as e:
         st.error(f"Errore durante la creazione del backup: {e}")
