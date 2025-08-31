@@ -195,14 +195,28 @@ def clear_sheet_content(sheet_name):
 def create_backup():
     try:
         client = get_gdrive_client()
-        source_sheet = client.open(SPREADSHEET_NAME)
-        timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-        backup_name = f"{SPREADSHEET_NAME}_backup_{timestamp}"
+        sh = client.open(SPREADSHEET_NAME)
+
+        # Esporta il foglio "orario" in CSV
+        ws_orario = sh.worksheet(ORARIO_SHEET)
+        df_orario = gd.get_as_dataframe(ws_orario, evaluate_formulas=True, header=0).dropna(how='all')
         
-        # Uso client.copy() al posto di sh.duplicate()
-        client.copy(source_sheet.id, title=backup_name)
+        # Esporta il foglio "storico" in CSV
+        ws_storico = sh.worksheet(STORICO_SHEET)
+        df_storico = gd.get_as_dataframe(ws_storico, evaluate_formulas=True, header=0).dropna(how='all')
+
+        # Comprimi i DataFrame in un file ZIP in memoria
+        import io
+        import zipfile
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
+            # Aggiungi i file CSV al buffer
+            zip_file.writestr("orario.csv", df_orario.to_csv(index=False).encode('utf-8'))
+            zip_file.writestr("storico.csv", df_storico.to_csv(index=False).encode('utf-8'))
         
-        return backup_name
+        # Restituisci il contenuto del file ZIP
+        zip_buffer.seek(0)
+        return zip_buffer
     except Exception as e:
         st.error(f"Errore durante la creazione del backup: {e}")
         return None
@@ -696,9 +710,13 @@ elif menu == "Statistiche":
             st.warning("Devi spuntare la conferma prima di cancellare lo storico delle assenze.")
 
     st.subheader("Cloud Backup")
-    st.info("Crea una copia di backup del tuo foglio di calcolo su Google Drive.")
-    if st.button("Crea Backup"):
-        with st.spinner("Creazione backup in corso..."):
-            backup_name = create_backup()
-            if backup_name:
-                st.success(f"Backup creato con successo! Il nuovo foglio si chiama: '{backup_name}'")
+    st.info("Scarica un backup compresso dei dati dei fogli Orario e Storico.")
+    # Esegui la funzione di backup solo quando il pulsante di download viene cliccato backup_file = create_backup()
+    if backup_file:
+        st.download_button(
+            label="⬇️ Scarica Backup (ZIP)",
+            data=backup_file,
+            file_name=f"{SPREADSHEET_NAME}_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
+            mime="application/zip",
+            help="Crea un backup in formato .zip e lo scarica direttamente."
+        )
