@@ -586,7 +586,7 @@ elif menu == "Gestione Assenze":
                     st.success("Tabella confermata ✅ Ora puoi salvarla nello storico.")
 
 # --- Step 2: Salva nello storico (solo se confermata) ---
-if "sostituzioni_confermate" in st.session_state and st.sidebar.button("💾 Salva nello storico"):
+if "sostituzioni_confermate" in st.session_state and st.st.button("💾 Salva nello storico"):
     # prendi i dati dalla sessione
     sost_df = st.session_state.get("sostituzioni_confermate")
     ore_assenti_session = st.session_state.get("ore_assenti_confermate")
