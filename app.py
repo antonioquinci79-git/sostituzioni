@@ -619,7 +619,9 @@ elif menu == "Gestione Assenze":
                     height=200,
                     key="whatsapp_text_area"
                 )
-
+                # Utilizza il nuovo componente
+                from copy_to_clipboard_button import copy_to_clipboard_button
+                copy_to_clipboard_button("📋 Copia Testo", testo_modificato, key="whatsapp_button")
 
                 # --- Step 1: conferma tabella (non salva ancora) ---
                 if st.button("✅ Conferma tabella (non salva ancora)"):
