@@ -205,6 +205,10 @@ def create_backup():
         ws_storico = sh.worksheet(STORICO_SHEET)
         df_storico = gd.get_as_dataframe(ws_storico, evaluate_formulas=True, header=0).dropna(how='all')
 
+        # Esporta il foglio "assenze" in CSV
+        ws_assenze = sh.worksheet(ASSENZE_SHEET)
+        df_assenze = gd.get_as_dataframe(ws_assenze, evaluate_formulas=True, header=0).dropna(how='all')
+
         # Comprimi i DataFrame in un file ZIP in memoria
         import io
         import zipfile
@@ -213,6 +217,7 @@ def create_backup():
             # Aggiungi i file CSV al buffer
             zip_file.writestr("orario.csv", df_orario.to_csv(index=False).encode('utf-8'))
             zip_file.writestr("storico.csv", df_storico.to_csv(index=False).encode('utf-8'))
+            zip_file.writestr("assenze.csv", df_assenze.to_csv(index=False).encode('utf-8'))
         
         # Restituisci il contenuto del file ZIP
         zip_buffer.seek(0)
