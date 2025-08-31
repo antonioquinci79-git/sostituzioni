@@ -1,4 +1,3 @@
-# app_googlesheets.py
 import streamlit as st
 import pandas as pd
 import os
@@ -19,6 +18,7 @@ ASSENZE_SHEET = "assenze"
 # =========================
 # CLIENT GOOGLE DRIVE
 # =========================
+@st.cache_resource
 def get_gdrive_client():
     gdrive_credentials = st.secrets["gdrive"]
     scope = [
@@ -283,11 +283,13 @@ def vista_pivot_docenti(df, mode="docenti"):
 st.title("📚 Gestione orari e Sostituzioni Docenti (Google Sheets)")
 # assicurati che i fogli esistano con le intestazioni
 try:
-    ensure_sheets_exist()
+    with st.spinner('Caricamento dati...'):
+        ensure_sheets_exist()
 except Exception as e:
     st.error(f"Impossibile inizializzare i fogli Google: {e}")
 
-orario_df = carica_orario()
+with st.spinner('Caricamento orario...'):
+    orario_df = carica_orario()
 
 # =========================
 # MENU PRINCIPALE
@@ -423,7 +425,8 @@ elif menu == "Gestione Assenze":
                 st.subheader("🔄 Possibili sostituti")
                 sostituzioni = []
                 # Carica storico per prioritizzazione del carico (come in app.py)
-                df_storico, df_assenze = carica_statistiche()
+                with st.spinner('Caricamento statistiche...'):
+                    df_storico, df_assenze = carica_statistiche()
                 storici = pd.DataFrame()
                 if not df_storico.empty:
                     storici = df_storico.groupby("docente")["ore"].sum().reset_index().rename(columns={"ore": "total"})
@@ -627,7 +630,8 @@ elif menu == "Visualizza Orario":
 # --- STATISTICHE ---
 elif menu == "Statistiche":
     st.header("📊 Statistiche Sostituzioni")
-    df_storico, df_assenze = carica_statistiche()
+    with st.spinner('Caricamento statistiche...'):
+        df_storico, df_assenze = carica_statistiche()
     if df_storico.empty:
         st.info("Nessuna statistica disponibile. Registra prima delle sostituzioni.")
     else:
