@@ -356,6 +356,7 @@ if menu == "Inserisci/Modifica Orario":
                     orario_df = pd.concat([orario_df, nuovo], ignore_index=True)
                     if salva_orario(orario_df):
                         st.success("Lezione aggiunta all'orario e salvata su Google Sheets ✅")
+                        st.rerun()
             else:
                 st.error("Compila tutti i campi per aggiungere una lezione.")
 
