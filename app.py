@@ -610,7 +610,7 @@ elif menu == "Gestione Assenze":
                 for _, row in edited_df_sorted.iterrows():
                     # Solo se c'è un sostituto
                     if row["Sostituto"] and row["Sostituto"] != "Nessuno":
-                        testo += f"• {row['Ora']} ORA - *{row['Classe']}* \n {row['Assente']} 🔄 *{row['Sostituto']}*\n"
+                        testo += f"• {row['Ora']} ORA - *{row['Classe']}* \n {row['Assente']} → *{row['Sostituto']}*\n"
 
                 st.subheader("📤 Testo per WhatsApp (copia e modifica)")
                 st.text_area(
