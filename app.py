@@ -654,11 +654,8 @@ elif menu == "Statistiche":
         st.info("Nessuna assenza registrata.")
     else:
         st.dataframe(df_assenze, use_container_width=True, hide_index=True)
-        try:
-            df_assenze_agg = df_assenze.groupby("docente")["ora"].count().reset_index().rename(columns={"ora": "Totale Ore Assenti"})
-            st.bar_chart(df_assenze_agg.set_index("docente"))
-        except Exception:
-            st.info("Impossibile calcolare le statistiche delle assenze (controlla intestazioni nel foglio).")
+        df_assenze_agg = df_assenze.groupby("docente")["ora"].count().reset_index().rename(columns={"ora": "Totale Ore Assenti"})
+        st.bar_chart(df_assenze_agg.set_index("docente"))
 
     st.subheader("⚠️ Azzeramento storico assenze")
     conferma_assenze = st.checkbox("Confermo di voler cancellare definitivamente lo storico delle assenze", key="conf_assenze")
