@@ -619,25 +619,7 @@ elif menu == "Gestione Assenze":
                     height=200,
                     key="whatsapp_text_area"
                 )
-                # Codice JavaScript per copiare il testo
-                js_code = f"""
-                <script>
-                    function copyToClipboard(text) {{
-                        navigator.clipboard.writeText(text).then(function() {{
-                            // Potrebbe essere utile aggiungere un messaggio di feedback
-                        }}, function(err) {{
-                            // Gestione errore
-                        }});
-                    }}
-                </script>
-                <button onclick="copyToClipboard(`{testo.strip()}`)">
-                    📋 Copia Testo
-                </button>
-                """
 
-                # Importa il modulo html e visualizza il pulsante
-                import streamlit.components.v1 as components
-                components.html(js_code, height=40)
 
                 # --- Step 1: conferma tabella (non salva ancora) ---
                 if st.button("✅ Conferma tabella (non salva ancora)"):
