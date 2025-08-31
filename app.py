@@ -184,30 +184,6 @@ def clear_sheet_content(sheet_name):
         st.error(f"Errore nell'azzeramento del foglio {sheet_name}: {e}")
         return False
 
-def rimuovi_righe_per_data(sheet_name, data):
-    """Rimuove tutte le righe di uno sheet che corrispondono alla data passata"""
-    try:
-        client = get_gdrive_client()
-        sh = client.open(SPREADSHEET_NAME)
-        ws = sh.worksheet(sheet_name)
-
-        # Scarica tutti i dati
-        df = gd.get_as_dataframe(ws, header=0).dropna(how="all")
-
-        if "data" not in df.columns:
-            return False  # se il foglio non ha colonna data, non facciamo nulla
-
-        # Filtra le righe diverse dalla data indicata
-        df_filtrato = df[df["data"] != str(data)]
-
-        # Riscrivi il foglio con i dati filtrati
-        gd.set_with_dataframe(ws, df_filtrato, include_index=False, include_column_header=True)
-        return True
-    except Exception as e:
-        st.error(f"Errore nella rimozione delle righe del foglio {sheet_name} per la data {data}: {e}")
-        return False
-
-
 # =========================
 # UTILITA' PER DOWNLOAD e PIVOT
 # =========================
@@ -610,52 +586,24 @@ if st.button("✅ Conferma tabella (non salva ancora)"):
 
     st.success("Tabella confermata ✅ Ora puoi salvarla nello storico.")
 
-# --- Step 2: Salva nello storico (con controllo se già esistono dati per quella data) ---
+# --- Step 2: Salva nello storico (appare dopo la conferma, non in sidebar) ---
 if st.session_state.get("sostituzioni_confermate") is not None:
-    sost_df = st.session_state.get("sostituzioni_confermate")
-    ore_assenti_session = st.session_state.get("ore_assenti_confermate")
-    data_tmp = st.session_state.get("data_sostituzione_tmp")
-    giorno_tmp = st.session_state.get("giorno_assente_tmp")
+    if st.button("💾 Salva nello storico", key="save_storico_main"):
+        sost_df = st.session_state.get("sostituzioni_confermate")
+        ore_assenti_session = st.session_state.get("ore_assenti_confermate")
+        data_tmp = st.session_state.get("data_sostituzione_tmp")
+        giorno_tmp = st.session_state.get("giorno_assente_tmp")
 
-    # Carica lo storico attuale
-    df_storico, df_assenze = carica_statistiche()
-    gia_presenti = False
-    if not df_storico.empty and str(data_tmp) in df_storico["data"].values:
-        gia_presenti = True
-
-    if gia_presenti:
-        st.warning(f"⚠️ Ci sono già sostituzioni salvate per la data {data_tmp}. Vuoi aggiungere oppure sostituire quelle esistenti?")
-
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("➕ Aggiungi allo storico"):
-                if salva_storico_assenze(data_tmp, giorno_tmp, sost_df, ore_assenti_session):
-                    st.success("Nuove assenze e sostituzioni aggiunte allo storico ✅")
-                    for k in ["sostituzioni_confermate", "ore_assenti_confermate", "data_sostituzione_tmp", "giorno_assente_tmp"]:
-                        st.session_state.pop(k, None)
+        if sost_df is not None and ore_assenti_session is not None:
+            if salva_storico_assenze(data_tmp, giorno_tmp, sost_df, ore_assenti_session):
+                st.success("Assenze e sostituzioni salvate nello storico ✅")
+                # pulizia sessione e refresh UI
+                for k in ["sostituzioni_confermate", "ore_assenti_confermate", "data_sostituzione_tmp", "giorno_assente_tmp"]:
+                    st.session_state.pop(k, None)
+                try:
                     st.rerun()
-
-        with col2:
-            if st.button("♻️ Sostituisci quelle del giorno"):
-                # rimuovi le righe di quella data sia da storico che da assenze
-                ok1 = rimuovi_righe_per_data(STORICO_SHEET, data_tmp)
-                ok2 = rimuovi_righe_per_data(ASSENZE_SHEET, data_tmp)
-                if ok1 and ok2:
-                    if salva_storico_assenze(data_tmp, giorno_tmp, sost_df, ore_assenti_session):
-                        st.success("Assenze e sostituzioni aggiornate nello storico ✅")
-                        for k in ["sostituzioni_confermate", "ore_assenti_confermate", "data_sostituzione_tmp", "giorno_assente_tmp"]:
-                            st.session_state.pop(k, None)
-                        st.rerun()
-    else:
-        # Se non ci sono già dati per quel giorno → salvataggio normale
-        if st.button("💾 Salva nello storico", key="save_storico_main"):
-            if sost_df is not None and ore_assenti_session is not None:
-                if salva_storico_assenze(data_tmp, giorno_tmp, sost_df, ore_assenti_session):
-                    st.success("Assenze e sostituzioni salvate nello storico ✅")
-                    for k in ["sostituzioni_confermate", "ore_assenti_confermate", "data_sostituzione_tmp", "giorno_assente_tmp"]:
-                        st.session_state.pop(k, None)
-                    st.rerun()
-
+                except Exception:
+                    pass
 
 
 
