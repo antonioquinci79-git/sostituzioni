@@ -714,15 +714,14 @@ elif menu == "Statistiche":
         else:
             st.warning("Devi spuntare la conferma prima di cancellare lo storico delle assenze.")
 
-st.subheader("Cloud Backup")
-st.info("Scarica un backup compresso dei dati dei fogli Orario e Storico.")
-# Esegui la funzione di backup solo quando il pulsante di download viene cliccato
-backup_file = create_backup()
-if backup_file:
-    st.download_button(
-        label="⬇️ Scarica Backup (ZIP)",
-        data=backup_file,
-        file_name=f"{SPREADSHEET_NAME}_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
-        mime="application/zip",
-        help="Crea un backup in formato .zip e lo scarica direttamente."
-    )
+    st.subheader("Cloud Backup")
+    st.info("Scarica un backup compresso dei dati dei fogli Orario, Storico e Assenze.")
+    backup_file = create_backup()
+    if backup_file:
+        st.download_button(
+            label="⬇️ Scarica Backup (ZIP)",
+            data=backup_file,
+            file_name=f"{SPREADSHEET_NAME}_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
+            mime="application/zip",
+            help="Crea un backup in formato .zip e lo scarica direttamente."
+        )
