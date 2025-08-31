@@ -561,46 +561,51 @@ elif menu == "Gestione Assenze":
                     key="whatsapp_text_area"
                 )
 
-                # Step 1: conferma tabella (non salva ancora nello storico)
-                if st.button("✅ Conferma tabella (non salva ancora)"):
-                    # Controllo conflitti: stesso docente in più classi nella stessa ora
-                    conflitti = []
-                    for ora in edited_df_sorted["Ora"].unique():
-                        assegnazioni = edited_df_sorted[edited_df_sorted["Ora"] == ora]
-                        sostituti = [s for s in assegnazioni["Sostituto"] if s != "Nessuno"]
-                        duplicati = [s for s in sostituti if sostituti.count(s) > 1]
-                        if duplicati:
-                            conflitti.append((ora, list(set(duplicati))))
+# --- Step 1: conferma tabella (non salva ancora) ---
+if st.button("✅ Conferma tabella (non salva ancora)"):
+    # Controllo conflitti: stesso docente in più classi nella stessa ora
+    conflitti = []
+    for ora in edited_df_sorted["Ora"].unique():
+        assegnazioni = edited_df_sorted[edited_df_sorted["Ora"] == ora]
+        sostituti = [s for s in assegnazioni["Sostituto"] if s != "Nessuno"]
+        duplicati = [s for s in sostituti if sostituti.count(s) > 1]
+        if duplicati:
+            conflitti.append((ora, list(set(duplicati))))
 
-                    if conflitti:
-                        st.error("⚠️ Errore: lo stesso docente è stato assegnato a più classi nella stessa ora:")
-                        for ora, docs in conflitti:
-                            st.write(f"- Ora {ora}: {', '.join(docs)}")
-                        st.stop()
+    if conflitti:
+        st.error("⚠️ Errore: lo stesso docente è stato assegnato a più classi nella stessa ora:")
+        for ora, docs in conflitti:
+            st.write(f"- Ora {ora}: {', '.join(docs)}")
+        st.stop()
 
-                    # Salviamo in sessione per il passaggio successivo
-                    st.session_state["sostituzioni_confermate"] = edited_df_sorted.copy()
-                    st.session_state["ore_assenti_confermate"] = ore_assenti.copy()
-                    st.session_state["data_sostituzione_tmp"] = data_sostituzione
-                    st.session_state["giorno_assente_tmp"] = giorno_assente
-                    st.success("Tabella confermata ✅ Ora puoi salvarla nello storico.")
+    # Salviamo in sessione per il passaggio successivo
+    st.session_state["sostituzioni_confermate"] = edited_df_sorted.copy()
+    st.session_state["ore_assenti_confermate"] = ore_assenti.copy()
+    st.session_state["data_sostituzione_tmp"] = data_sostituzione
+    st.session_state["giorno_assente_tmp"] = giorno_assente
+    st.success("Tabella confermata ✅ Ora puoi salvarla nello storico.")
 
-# --- Step 2: Salva nello storico (solo se confermata) ---
-if "sostituzioni_confermate" in st.session_state and st.st.button("💾 Salva nello storico"):
-    # prendi i dati dalla sessione
-    sost_df = st.session_state.get("sostituzioni_confermate")
-    ore_assenti_session = st.session_state.get("ore_assenti_confermate")
-    data_tmp = st.session_state.get("data_sostituzione_tmp")
-    giorno_tmp = st.session_state.get("giorno_assente_tmp")
-    if sost_df is not None and ore_assenti_session is not None:
-        # salvataggio finale su Google Sheets
-        if salva_storico_assenze(data_tmp, giorno_tmp, sost_df, ore_assenti_session):
-            st.success("Assenze e sostituzioni salvate nello storico ✅")
-            # pulizia sessione
-            del st.session_state["sostituzioni_confermate"]
-            del st.session_state["ore_assenti_confermate"]
-            del st.session_state["data_sostituzione_tmp"]
-            del st.session_state["giorno_assente_tmp"]
+    # --- Step 2: Salva nello storico (subito sotto la conferma) ---
+    if st.button("💾 Salva nello storico"):
+        sost_df = st.session_state.get("sostituzioni_confermate")
+        ore_assenti_session = st.session_state.get("ore_assenti_confermate")
+        data_tmp = st.session_state.get("data_sostituzione_tmp")
+        giorno_tmp = st.session_state.get("giorno_assente_tmp")
+
+        if sost_df is not None and ore_assenti_session is not None:
+            # salvataggio finale su Google Sheets
+            if salva_storico_assenze(data_tmp, giorno_tmp, sost_df, ore_assenti_session):
+                st.success("Assenze e sostituzioni salvate nello storico ✅")
+                # pulizia sessione
+                for k in [
+                    "sostituzioni_confermate",
+                    "ore_assenti_confermate",
+                    "data_sostituzione_tmp",
+                    "giorno_assente_tmp"
+                ]:
+                    if k in st.session_state:
+                        del st.session_state[k]
+
 
 # --- VISUALIZZA ORARIO ---
 elif menu == "Visualizza Orario":
