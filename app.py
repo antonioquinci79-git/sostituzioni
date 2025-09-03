@@ -652,7 +652,7 @@ elif menu == "Gestione Assenze":
                             unsafe_allow_html=True
                         )
     
-    st.markdown("</div>", unsafe_allow_html=True)
+                    st.markdown("</div>", unsafe_allow_html=True)
 
                 # --- Step 1: conferma tabella (non salva ancora) ---
                 if st.button("✅ Conferma tabella (non salva ancora)"):
