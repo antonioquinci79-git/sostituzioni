@@ -8,6 +8,40 @@ from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 
 # =========================
+# STILI PERSONALIZZATI
+# =========================
+st.markdown("""
+<style>
+/* Bottoni più grandi */
+.stButton button {
+    width: 100%;
+    padding: 0.8em;
+    font-size: 1.05em;
+    border-radius: 12px;
+}
+
+/* Tabelle: font più piccolo e leggibile */
+.stDataFrame, .stDataEditor {
+    font-size: 0.9em !important;
+}
+
+/* Input: allarga i selectbox */
+.stSelectbox, .stTextInput, .stDateInput, .stMultiSelect {
+    width: 100% !important;
+}
+
+/* Margini orizzontali per respirare su mobile */
+.block-container {
+    padding-left: 1rem;
+    padding-right: 1rem;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
+
+
+# =========================
 # CONFIGURAZIONE FILE / SHEETS
 # =========================
 REQUIRED_COLUMNS = ["Docente", "Giorno", "Ora", "Classe", "Tipo", "Escludi"]
