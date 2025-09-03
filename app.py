@@ -644,6 +644,21 @@ elif menu == "Gestione Assenze":
                     """
                     st.markdown(card_html, unsafe_allow_html=True)
 
+                # --- VISTA TESTUALE per copia/incolla ---
+                st.subheader("📝 Sostituzioni in formato testo (copia/incolla)")
+
+                testo_output = ""
+                for ora, gruppo in edited_df.groupby("Ora"):
+                    testo_output += f"🕐 Ora {ora}\n"
+                    for _, row in gruppo.iterrows():
+                        sostituto = row['Sostituto'] if row['Sostituto'] != "Nessuno" else "—"
+                        testo_output += f" - {row['Classe']} → Assente: {row['Assente']} | Sostituzione: {sostituto}\n"
+                    testo_output += "\n"
+
+                st.text_area("Testo pronto da copiare", value=testo_output.strip(), height=250)
+
+                
+
                 # --- Step 1: conferma tabella (non salva ancora) ---
                 if st.button("✅ Conferma tabella (non salva ancora)"):
                     # Controllo conflitti: stesso docente in più classi nella stessa ora
