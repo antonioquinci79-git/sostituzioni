@@ -617,8 +617,28 @@ elif menu == "Gestione Assenze":
                     return ""
 
                 edited_df = edited_df.sort_values("Ora").reset_index(drop=True)
-                styled_sostituzioni = edited_df.style.map(evidenzia_sostegno_docente, subset=["Sostituto"])
-                st.dataframe(styled_sostituzioni, use_container_width=True, hide_index=True)
+                # --- CARD VIEW per le sostituzioni ---
+                st.subheader("📋 Sostituzioni in formato card")
+                for _, row in edited_df.iterrows():
+                    st.markdown(
+                        f"""
+                        <div style="
+                            border: 1px solid #ddd;
+                            border-radius: 12px;
+                            padding: 0.8em;
+                            margin-bottom: 0.8em;
+                            box-shadow: 1px 1px 4px rgba(0,0,0,0.08);
+                            background-color: #f9f9f9;
+                    ">
+                            <b>🕐 {row['Ora']}</b> — <b>{row['Classe']}</b><br>
+                            👩‍🏫 <i>Assente:</i> {row['Assente']}<br>
+                            ✅ <i>Sostituto:</i> <b style="color:{'green' if row['Sostituto'] in orario_df[orario_df['Tipo']=='Sostegno']['Docente'].unique() else 'blue'};">
+                                {row['Sostituto'] if row['Sostituto'] != "Nessuno" else "—"}
+                            </b>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                )
 
                 # Testo WhatsApp
                 edited_df_sorted = edited_df.copy()
