@@ -361,12 +361,13 @@ with st.spinner('Caricamento orario...'):
     orario_df = carica_orario()
 
 # =========================
-# MENU PRINCIPALE
+# MENU PRINCIPALE (mobile-friendly)
 # =========================
-menu = st.sidebar.radio(
-    "Naviga",
+menu = st.selectbox(
+    "📌 Naviga",
     ["Inserisci/Modifica Orario", "Gestione Assenze", "Visualizza Orario", "Statistiche"]
 )
+
 
 # --- INSERIMENTO/MODIFICA ORARIO ---
 if menu == "Inserisci/Modifica Orario":
