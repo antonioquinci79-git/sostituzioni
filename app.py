@@ -349,7 +349,7 @@ def vista_pivot_docenti(df, mode="docenti"):
 # =========================
 # AVVIO APP
 # =========================
-st.title("📚Sostituzioni Docenti")
+st.title("📚Sostituzioni docenti")
 # assicurati che i fogli esistano con le intestazioni
 try:
     with st.spinner('Caricamento dati...'):
