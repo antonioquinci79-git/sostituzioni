@@ -612,50 +612,30 @@ elif menu == "Gestione Assenze":
 
                 # evidenzia in verde i docenti di sostegno nei sostituti
                 
-                # --- CARD VIEW accorpata per ora ---
-                st.subheader("📋 Sostituzioni in formato card")
+                # --- VISTA A TABELLA ---
+                st.subheader("📋 Sostituzioni in tabella")
 
-                for ora, gruppo in edited_df.groupby("Ora"):
-                    blocchi = ""
-                    for _, row in gruppo.iterrows():
-                        colore = "green" if row['Sostituto'] in orario_df[orario_df['Tipo'] == 'Sostegno']['Docente'].unique() else "blue"
-                        blocchi += f"""
-                    <div style="margin-left: 1em; margin-bottom: 0.8em;">
-                        <b>{row['Classe']}</b><br>
-                        👩‍🏫 Assente: {row['Assente']}<br>
-                        ✅ Sostituzione: <b style="color:{colore};">
-                            {row['Sostituto'] if row['Sostituto'] != "Nessuno" else "—"}
-                        </b>
-                    </div>
-                    """
+                tabella_df = edited_df[["Ora", "Classe", "Assente", "Sostituto"]].copy()
+                ordine_ore = ["I", "II", "III", "IV", "V", "VI"]
+                tabella_df["Ora"] = pd.Categorical(tabella_df["Ora"], categories=ordine_ore, ordered=True)
+                tabella_df = tabella_df.sort_values(["Ora", "Classe"]).reset_index(drop=True)
 
-                    card_html = f"""
-                    <div style="
-                        border: 2px solid #ccc;
-                        border-radius: 14px;
-                        padding: 1em;
-                        margin-bottom: 1.2em;
-                        box-shadow: 1px 1px 6px rgba(0,0,0,0.1);
-                        background-color: #ffffff;
-                    ">
-                        <h4 style="margin-top:0;">🕐 Ora {ora}</h4>
-                        {blocchi}
-                    </div>
-                    """
-                    st.markdown(card_html, unsafe_allow_html=True)
+                st.dataframe(tabella_df, use_container_width=True, hide_index=True)
 
-                # --- VISTA TESTUALE per copia/incolla ---
-                st.subheader("📝 Sostituzioni in formato testo (copia/incolla)")
+                # --- VISTA TESTUALE per copia/incolla (mobile-friendly) ---
+                st.subheader("📝 Sostituzioni in formato testo (mobile/copincolla)")
 
                 testo_output = ""
-                for ora, gruppo in edited_df.groupby("Ora"):
+                for ora, gruppo in tabella_df.groupby("Ora"):
                     testo_output += f"🕐 Ora {ora}\n"
                     for _, row in gruppo.iterrows():
                         sostituto = row['Sostituto'] if row['Sostituto'] != "Nessuno" else "—"
-                        testo_output += f" - {row['Classe']} → Assente: {row['Assente']} | Sostituzione: {sostituto}\n"
-                    testo_output += "\n"
+                        testo_output += f"Classe {row['Classe']}\n"
+                        testo_output += f"👩‍🏫 Assente: {row['Assente']}\n"
+                        testo_output += f"✅ Sostituzione: {sostituto}\n\n"
+                testo_output = testo_output.strip()
 
-                st.text_area("Testo pronto da copiare", value=testo_output.strip(), height=250)
+                st.text_area("Testo pronto da copiare", value=testo_output, height=300)
 
                 
 
