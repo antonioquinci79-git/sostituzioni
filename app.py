@@ -611,12 +611,6 @@ elif menu == "Gestione Assenze":
                     edited_df.at[idx, "Sostituto"] = scelta.replace("[S] ", "")
 
                 # evidenzia in verde i docenti di sostegno nei sostituti
-                def evidenzia_sostegno_docente(val):
-                    if val in orario_df[orario_df["Tipo"] == "Sostegno"]["Docente"].unique():
-                        return "color: green; font-weight: bold;"
-                    return ""
-
-                edited_df = edited_df.sort_values("Ora").reset_index(drop=True)
                 
                 # --- CARD VIEW accorpata per ora ---
                 st.subheader("📋 Sostituzioni in formato card")
