@@ -688,31 +688,12 @@ elif menu == "Gestione Assenze":
 # --- VISUALIZZA ORARIO ---
 elif menu == "Visualizza Orario":
     st.header("📅 Orario completo")
-
-    # CSS leggero per migliorare la resa su mobile
-    st.markdown("""
-    <style>
-    /* Tabella più compatta e leggibile su mobile */
-    div[data-testid="stDataFrame"] {
-        overflow-x: auto;   /* Abilita scroll orizzontale */
-    }
-    div[data-testid="stDataFrame"] table {
-        font-size: 0.8em;   /* Font leggermente più piccolo */
-        white-space: nowrap; /* Evita a capo indesiderati */
-    }
-    /* Celle più compatte */
-    div[data-testid="stDataFrame"] th, 
-    div[data-testid="stDataFrame"] td {
-        padding: 4px 6px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
     if orario_df.empty:
         st.warning("Nessun orario disponibile.")
     else:
         vista_pivot_docenti(orario_df, mode="classi")
         download_orario(orario_df)
+
 
 
 # --- STATISTICHE ---
