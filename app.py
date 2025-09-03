@@ -619,57 +619,35 @@ elif menu == "Gestione Assenze":
                 edited_df = edited_df.sort_values("Ora").reset_index(drop=True)
                 # --- CARD VIEW per le sostituzioni ---
                 st.subheader("📋 Sostituzioni in formato card")
-                for _, row in edited_df.iterrows():
+                for ora, gruppo in edited_df.groupby("Ora"):
                     st.markdown(
                         f"""
                         <div style="
-                            border: 1px solid #ddd;
-                            border-radius: 12px;
-                            padding: 0.8em;
-                            margin-bottom: 0.8em;
-                            box-shadow: 1px 1px 4px rgba(0,0,0,0.08);
-                            background-color: #f9f9f9;
-                    ">
-                            <b>🕐 {row['Ora']}</b> — <b>{row['Classe']}</b><br>
-                            👩‍🏫 <i>Assente:</i> {row['Assente']}<br>
-                            ✅ <i>Sostituto:</i> <b style="color:{'green' if row['Sostituto'] in orario_df[orario_df['Tipo']=='Sostegno']['Docente'].unique() else 'blue'};">
+                            border: 2px solid #ccc;
+                            border-radius: 14px;
+                            padding: 1em;
+                            margin-bottom: 1.2em;
+                            box-shadow: 1px 1px 6px rgba(0,0,0,0.1);
+                            background-color: #ffffff;
+                        ">
+                        <h4 style="margin-top:0;">🕐 Ora {ora}</h4>
+                        """,
+                        unsafe_allow_html=True
+                    )
+                    for _, row in gruppo.iterrows():
+                        colore = "green" if row['Sostituto'] in orario_df[orario_df['Tipo'] == 'Sostegno']['Docente'].unique() else "blue"
+                        st.markdown(
+                            f"""
+                        <div style="margin-left: 1em; margin-bottom: 0.5em;">
+                            <b>{row['Classe']}</b><br>
+                            👩‍🏫 Assente: {row['Assente']}<br>
+                            ✅ Sostituzione: <b style="color:{colore};">
                                 {row['Sostituto'] if row['Sostituto'] != "Nessuno" else "—"}
                             </b>
                         </div>
                         """,
                         unsafe_allow_html=True
-                )
-
-                # Testo WhatsApp
-                edited_df_sorted = edited_df.copy()
-
-                mesi_it = {
-                    1: "Gennaio", 2: "Febbraio", 3: "Marzo", 4: "Aprile",
-                    5: "Maggio", 6: "Giugno", 7: "Luglio", 8: "Agosto",
-                    9: "Settembre", 10: "Ottobre", 11: "Novembre", 12: "Dicembre"
-                }
-
-                giorno_num = data_sostituzione.day
-                mese_nome = mesi_it[data_sostituzione.month]
-                anno = data_sostituzione.year
-                data_estesa = f"{giorno_assente} {giorno_num} {mese_nome} {anno}"
-
-                testo = "Buongiorno, supplenze.\n\n"
-                testo += f"📌 {data_estesa}\n\n"
-                
-                # Genera il testo delle sostituzioni
-                for _, row in edited_df_sorted.iterrows():
-                    # Solo se c'è un sostituto
-                    if row["Sostituto"] and row["Sostituto"] != "Nessuno":
-                        testo += f"• {row['Ora']} ora - *{row['Classe']}* \n {row['Assente']} → *{row['Sostituto']}*\n\n"
-
-                st.subheader("📤 Testo per WhatsApp (copia e modifica)")
-                st.text_area(
-                    "Modifica qui il messaggio prima di copiarlo:",
-                    testo.strip(),
-                    height=200,
-                    key="whatsapp_text_area"
-                )
+                    )
 
                 # --- Step 1: conferma tabella (non salva ancora) ---
                 if st.button("✅ Conferma tabella (non salva ancora)"):
