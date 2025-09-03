@@ -691,30 +691,34 @@ elif menu == "Visualizza Orario":
     if orario_df.empty:
         st.warning("Nessun orario disponibile.")
     else:
-        # Toggle per modalità mobile
-        modo_mobile = st.toggle("📱 Modalità mobile")
+        # Applica stile mobile-friendly
+        st.markdown("""
+        <style>
+        /* Scroll orizzontale */
+        div[data-testid="stDataFrame"] {
+            overflow-x: auto;
+        }
+        /* Tabella più compatta */
+        div[data-testid="stDataFrame"] table {
+            font-size: 0.8em;
+            white-space: nowrap;
+        }
+        /* Celle sticky per Giorno e Ora */
+        div[data-testid="stDataFrame"] tbody th {
+            position: sticky;
+            left: 0;
+            background: #f9f9f9;
+            z-index: 1;
+        }
+        </style>
+        """, unsafe_allow_html=True)
 
-        if modo_mobile:
-            # Vista a card per mobile
-            for giorno in ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì"]:
-                subset = orario_df[orario_df["Giorno"] == giorno]
-                if not subset.empty:
-                    st.subheader(giorno)
-                    for _, row in subset.iterrows():
-                        st.markdown(f"""
-                        <div style="border:1px solid #ccc; border-radius:8px; padding:8px; margin-bottom:6px;">
-                            <b>Ora:</b> {row['Ora']}<br>
-                            <b>Classe:</b> {row['Classe']}<br>
-                            <b>Docente:</b> {row['Docente']}<br>
-                            <b>Tipo:</b> {row['Tipo']}
-                        </div>
-                        """, unsafe_allow_html=True)
-        else:
-            # Vista pivot classi (default)
-            vista_pivot_docenti(orario_df, mode="classi")
+        # Manteniamo la pivot (più leggibile di tante card)
+        vista_pivot_docenti(orario_df, mode="classi")
 
         # Download sempre disponibile
         download_orario(orario_df)
+
 
 
 # --- STATISTICHE ---
