@@ -363,7 +363,7 @@ with st.spinner('Caricamento orario...'):
 # =========================
 # MENU PRINCIPALE (mobile-friendly)
 # =========================
-menu = st.selectbox(
+menu = st.sidebar.selectbox(
     "📌 Naviga",
     ["Inserisci/Modifica Orario", "Gestione Assenze", "Visualizza Orario", "Statistiche"]
 )
