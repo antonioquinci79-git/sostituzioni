@@ -616,33 +616,33 @@ elif menu == "Gestione Assenze":
                 st.subheader("📋 Sostituzioni in formato card")
 
                 for ora, gruppo in edited_df.groupby("Ora"):
-                blocchi = ""
-                for _, row in gruppo.iterrows():
-                    colore = "green" if row['Sostituto'] in orario_df[orario_df['Tipo'] == 'Sostegno']['Docente'].unique() else "blue"
-                    blocchi += f"""
-                <div style="margin-left: 1em; margin-bottom: 0.8em;">
-                    <b>{row['Classe']}</b><br>
-                    👩‍🏫 Assente: {row['Assente']}<br>
-                    ✅ Sostituzione: <b style="color:{colore};">
-                        {row['Sostituto'] if row['Sostituto'] != "Nessuno" else "—"}
-                    </b>
-                </div>
-                """
+                    blocchi = ""
+                    for _, row in gruppo.iterrows():
+                        colore = "green" if row['Sostituto'] in orario_df[orario_df['Tipo'] == 'Sostegno']['Docente'].unique() else "blue"
+                        blocchi += f"""
+                    <div style="margin-left: 1em; margin-bottom: 0.8em;">
+                        <b>{row['Classe']}</b><br>
+                        👩‍🏫 Assente: {row['Assente']}<br>
+                        ✅ Sostituzione: <b style="color:{colore};">
+                            {row['Sostituto'] if row['Sostituto'] != "Nessuno" else "—"}
+                        </b>
+                    </div>
+                    """
 
-                card_html = f"""
-                <div style="
-                    border: 2px solid #ccc;
-                    border-radius: 14px;
-                    padding: 1em;
-                    margin-bottom: 1.2em;
-                    box-shadow: 1px 1px 6px rgba(0,0,0,0.1);
-                    background-color: #ffffff;
-                ">
-                    <h4 style="margin-top:0;">🕐 Ora {ora}</h4>
-                    {blocchi}
-                </div>
-                """
-                st.markdown(card_html, unsafe_allow_html=True)
+                    card_html = f"""
+                    <div style="
+                        border: 2px solid #ccc;
+                        border-radius: 14px;
+                        padding: 1em;
+                        margin-bottom: 1.2em;
+                        box-shadow: 1px 1px 6px rgba(0,0,0,0.1);
+                        background-color: #ffffff;
+                    ">
+                        <h4 style="margin-top:0;">🕐 Ora {ora}</h4>
+                        {blocchi}
+                    </div>
+                    """
+                    st.markdown(card_html, unsafe_allow_html=True)
 
                 # --- Step 1: conferma tabella (non salva ancora) ---
                 if st.button("✅ Conferma tabella (non salva ancora)"):
