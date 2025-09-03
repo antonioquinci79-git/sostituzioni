@@ -616,12 +616,11 @@ elif menu == "Gestione Assenze":
                 st.subheader("📋 Sostituzioni in formato card")
 
                 for ora, gruppo in edited_df.groupby("Ora"):
-                    # Costruisco il contenuto interno delle sostituzioni
                     blocchi = ""
                     for _, row in gruppo.iterrows():
                         colore = "green" if row['Sostituto'] in orario_df[orario_df['Tipo'] == 'Sostegno']['Docente'].unique() else "blue"
                         blocchi += f"""
-                        <div style="margin-left: 1em; margin-bottom: 0.5em;">
+                        <div style="margin-left: 1em; margin-bottom: 0.8em;">
                             <b>{row['Classe']}</b><br>
                             👩‍🏫 Assente: {row['Assente']}<br>
                             ✅ Sostituzione: <b style="color:{colore};">
@@ -630,7 +629,6 @@ elif menu == "Gestione Assenze":
                         </div>
                         """
 
-                    # Creo la card intera
                     card_html = f"""
                     <div style="
                         border: 2px solid #ccc;
