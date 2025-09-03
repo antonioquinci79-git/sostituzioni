@@ -625,7 +625,7 @@ elif menu == "Gestione Assenze":
                 # --- VISTA TESTUALE per copia/incolla (mobile-friendly) ---
                 st.subheader("📝 Sostituzioni in formato testo (mobile/copincolla)")
 
-                testo_output = ""
+                testo_output = "Buongiorno, supplenze.\n\n"
                 for ora, gruppo in tabella_df.groupby("Ora"):
                     testo_output += f"🕐 Ora {ora}\n"
                     for _, row in gruppo.iterrows():
