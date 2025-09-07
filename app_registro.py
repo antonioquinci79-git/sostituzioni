@@ -48,9 +48,6 @@ def carica_segnalazioni():
         df = gd.get_as_dataframe(ws, evaluate_formulas=True, header=0).dropna(how="all")
         if not df.empty:
             df = df[REQUIRED_COLUMNS]
-            # Normalizza la colonna Data
-            if "Data" in df.columns:
-                df["Data"] = pd.to_datetime(df["Data"], errors="coerce").dt.strftime("%d/%m/%Y")
         else:
             df = pd.DataFrame(columns=REQUIRED_COLUMNS)
         return df
@@ -94,8 +91,7 @@ if menu == "➕ Inserisci Segnalazione":
             "⚠️ Criticità",
             ["", "Non ha portato i compiti", "Non ha il materiale didattico", "Disturbo in classe", "Altro"]
         )
-        # Salva sempre la data nel formato gg/mm/aaaa
-        data = st.date_input("📅 Data", datetime.today()).strftime("%d/%m/%Y")
+        data = st.date_input("📅 Data", datetime.today()).strftime("%Y-%m-%d")
         docente = st.text_input("👩‍🏫 Docente")
         note = st.text_area("📝 Note aggiuntive")
 
