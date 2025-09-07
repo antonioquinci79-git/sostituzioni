@@ -43,6 +43,36 @@ def ensure_sheet_exist():
         header_df = pd.DataFrame(columns=REQUIRED_COLUMNS)
         gd.set_with_dataframe(ws, header_df, include_index=False, include_column_header=True)
 
+# ===== Helper per parsing date robusto =====
+def parse_date_series(series: pd.Series) -> pd.Series:
+    """
+    Pulisce la serie rimuovendo apostrofi/virgolette iniziali e prova a parsare:
+    1) ISO %Y-%m-%d
+    2) %d/%m/%Y
+    3) fallback con dayfirst=True
+    Restituisce Series di datetime64[ns] (NaT se non parsabile).
+    """
+    s = series.astype(str).str.strip()
+    # rimuovi apostrofi o virgolette iniziali (Google Sheets può mostrarli)
+    s = s.str.replace(r"^['\"]+", "", regex=True)
+
+    # prova ISO YYYY-MM-DD
+    parsed = pd.to_datetime(s, format="%Y-%m-%d", errors="coerce")
+
+    # fallback dd/mm/yyyy
+    mask = parsed.isna()
+    if mask.any():
+        parsed2 = pd.to_datetime(s[mask], format="%d/%m/%Y", errors="coerce")
+        parsed.loc[mask] = parsed2
+
+    # ultimo fallback: parsing generico cercando dayfirst
+    mask = parsed.isna()
+    if mask.any():
+        parsed3 = pd.to_datetime(s[mask], errors="coerce", dayfirst=True)
+        parsed.loc[mask] = parsed3
+
+    return parsed
+
 def carica_segnalazioni():
     try:
         client = get_gdrive_client()
@@ -50,11 +80,11 @@ def carica_segnalazioni():
         ws = sh.worksheet(SEGNALAZIONI_SHEET)
         df = gd.get_as_dataframe(ws, evaluate_formulas=True, header=0).dropna(how="all")
         if not df.empty:
-            df = df[REQUIRED_COLUMNS]
-            # formatta data come gg/mm/aaaa con gestione valori mancanti
+            # garantisco colonne e ordine
+            df = df.reindex(columns=REQUIRED_COLUMNS)
+            # formatta/parsifica la colonna Data in modo robusto (datetime dtype)
             if "Data" in df:
-                df["Data"] = pd.to_datetime(df["Data"], errors="coerce")
-                df["Data"] = df["Data"].dt.strftime("%d/%m/%Y").fillna("")
+                df["Data"] = parse_date_series(df["Data"])
         else:
             df = pd.DataFrame(columns=REQUIRED_COLUMNS)
         return df
@@ -68,7 +98,8 @@ def salva_segnalazione(nome, classe, materia, criticita, data, docente, note):
         sh = client.open(SPREADSHEET_NAME)
         ws = sh.worksheet(SEGNALAZIONI_SHEET)
         new_row = [nome or "", classe or "", materia or "", criticita or "", data or "", docente or "", note or ""]
-        ws.append_row(new_row, value_input_option="RAW")
+        # USER_ENTERED permette a Google Sheets di interpretare la stringa della data come vero tipo data
+        ws.append_row(new_row, value_input_option="USER_ENTERED")
         return True
     except Exception as e:
         st.error(f"Errore nel salvataggio: {e}")
@@ -145,7 +176,7 @@ if menu == "➕ Inserisci Segnalazione":
         materia = st.selectbox("📚 Materia", [""] + materie_list)
         criticita = st.selectbox("⚠️ Criticità", [""] + criticita_list)
 
-        # uso formato ISO per storage, formatteremo per l'UI al caricamento
+        # uso formato ISO per storage, Google Sheets lo interpreterà come data grazie a USER_ENTERED
         date_obj = st.date_input("📅 Data", datetime.today())
         data = date_obj.strftime("%Y-%m-%d")
 
@@ -156,7 +187,7 @@ if menu == "➕ Inserisci Segnalazione":
 
         if submitted:
             if nome and materia and criticita:
-                ok = salva_segnalazione(nome, classe, materia, criticita, data, docente, note)
+                ok = salva_segnalazione(nome, classe, materia, criticiti if (criticiti := criticita) else criticita, data, docente, note)
                 if ok:
                     st.success("✅ Segnalazione salvata correttamente")
             else:
@@ -187,11 +218,16 @@ elif menu == "📜 Storico":
 
         # ordinamento per data (più recente in alto)
         if "Data" in df:
+            # Data è già datetime dopo carica_segnalazioni; in caso contrario forziamo
             df["Data"] = pd.to_datetime(df["Data"], errors="coerce")
             df = df.sort_values("Data", ascending=False)
-            df["Data"] = df["Data"].dt.strftime("%d/%m/%Y").fillna("")
 
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        # creiamo una copia per la visualizzazione (formattata dd/mm/YYYY)
+        df_display = df.copy()
+        if "Data" in df_display:
+            df_display["Data"] = df_display["Data"].dt.strftime("%d/%m/%Y").fillna("")
+
+        st.dataframe(df_display, use_container_width=True, hide_index=True)
 
         st.download_button(
             "⬇️ Scarica CSV filtrato",
@@ -222,7 +258,10 @@ elif menu == "📊 Statistiche":
 
         # Trend temporale delle segnalazioni
         st.subheader("Andamento segnalazioni nel tempo")
-        df["Data"] = pd.to_datetime(df["Data"], errors="coerce")
-        trend = df.dropna(subset=["Data"]).groupby(df["Data"].dt.to_period("M"))["Nome"].count()
-        trend.index = trend.index.to_timestamp()
-        st.line_chart(trend)
+        if "Data" in df:
+            df["Data"] = pd.to_datetime(df["Data"], errors="coerce")
+            trend = df.dropna(subset=["Data"]).groupby(df["Data"].dt.to_period("M"))["Nome"].count()
+            trend.index = trend.index.to_timestamp()
+            st.line_chart(trend)
+        else:
+            st.info("Nessuna informazione sulla data disponibile per il trend.")
