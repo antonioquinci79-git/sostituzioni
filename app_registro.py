@@ -12,6 +12,7 @@ SPREADSHEET_NAME = "RegistroAlunni"
 SEGNALAZIONI_SHEET = "segnalazioni"
 ALUNNI_SHEET = "alunni"
 MATERIE_SHEET = "materie"
+CRITICITA_SHEET = "criticita"
 
 REQUIRED_COLUMNS = ["Nome", "Classe", "Materia", "Criticità", "Data", "Docente", "Note"]
 
@@ -50,6 +51,9 @@ def carica_segnalazioni():
         df = gd.get_as_dataframe(ws, evaluate_formulas=True, header=0).dropna(how="all")
         if not df.empty:
             df = df[REQUIRED_COLUMNS]
+            # formatta data come gg/mm/aaaa
+            if "Data" in df:
+                df["Data"] = pd.to_datetime(df["Data"], errors="coerce").dt.strftime("%d/%m/%Y")
         else:
             df = pd.DataFrame(columns=REQUIRED_COLUMNS)
         return df
@@ -69,6 +73,9 @@ def salva_segnalazione(nome, classe, materia, criticita, data, docente, note):
         st.error(f"Errore nel salvataggio: {e}")
         return False
 
+# =========================
+# FOGLI DI SUPPORTO
+# =========================
 def carica_alunni():
     try:
         client = get_gdrive_client()
@@ -93,12 +100,24 @@ def carica_materie():
         return []
     return []
 
+def carica_criticita():
+    try:
+        client = get_gdrive_client()
+        sh = client.open(SPREADSHEET_NAME)
+        ws = sh.worksheet(CRITICITA_SHEET)
+        df = gd.get_as_dataframe(ws, evaluate_formulas=True, header=0).dropna(how="all")
+        if not df.empty and "Criticità" in df:
+            return df["Criticità"].dropna().unique().tolist()
+    except:
+        return []
+    return []
+
 # =========================
 # STREAMLIT APP
 # =========================
 st.title("📘 Registro Elettronico Alunni")
 
-# inizializza foglio
+# inizializza foglio principale
 ensure_sheet_exist()
 
 menu = st.sidebar.selectbox(
@@ -112,6 +131,7 @@ if menu == "➕ Inserisci Segnalazione":
 
     alunni_df = carica_alunni()
     materie_list = carica_materie()
+    criticita_list = carica_criticita()
 
     with st.form("segnalazione_form"):
         nome = st.selectbox("👤 Nome alunno", [""] + alunni_df["Nome"].dropna().tolist())
@@ -122,12 +142,9 @@ if menu == "➕ Inserisci Segnalazione":
                 classe = classe_row.iloc[0]["Classe"]
 
         materia = st.selectbox("📚 Materia", [""] + materie_list)
-        criticita = st.selectbox(
-            "⚠️ Criticità",
-            ["", "Non ha portato i compiti", "Non ha il materiale didattico", "Disturbo in classe", "Altro"]
-        )
+        criticita = st.selectbox("⚠️ Criticità", [""] + criticita_list)
         data = st.date_input("📅 Data", datetime.today()).strftime("%d/%m/%Y")
-        docente = st.text_input("👩‍🏫 Docente")
+        docente = st.text_input("👩‍🏫 Docente", value="A.Q.")
         note = st.text_area("📝 Note aggiuntive")
 
         submitted = st.form_submit_button("💾 Salva segnalazione")
@@ -180,20 +197,14 @@ elif menu == "📊 Statistiche":
     if df.empty:
         st.info("Nessuna segnalazione presente.")
     else:
-        # Conteggio per alunno
-        st.subheader("Segnalazioni per alunno")
-        conteggio_alunni = df.groupby("Nome")["Criticità"].count().reset_index(name="Totale")
-        st.dataframe(conteggio_alunni, use_container_width=True, hide_index=True)
-        st.bar_chart(conteggio_alunni.set_index("Nome"))
+        criticita_list = carica_criticita()
+        if not criticita_list:
+            st.info("Nessun elenco di criticità disponibile.")
+        else:
+            # Conta per criticità (solo quelle definite nel foglio)
+            st.subheader("Distribuzione delle criticità")
+            conteggio_criticita = df[df["Criticità"].isin(criticita_list)] \
+                                  .groupby("Criticità")["Nome"] \
+                                  .count().reset_index(name="Totale")
 
-        # Conteggio per classe
-        st.subheader("Segnalazioni per classe")
-        conteggio_classi = df.groupby("Classe")["Criticità"].count().reset_index(name="Totale")
-        st.dataframe(conteggio_classi, use_container_width=True, hide_index=True)
-        st.bar_chart(conteggio_classi.set_index("Classe"))
-
-        # Conteggio per materia
-        st.subheader("Segnalazioni per materia")
-        conteggio_materie = df.groupby("Materia")["Criticità"].count().reset_index(name="Totale")
-        st.dataframe(conteggio_materie, use_container_width=True, hide_index=True)
-        st.bar_chart(conteggio_materie.set_index("Materia"))
+            st.bar_chart(conteggio_criticita.set_index("Criticità"))
