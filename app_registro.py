@@ -51,9 +51,10 @@ def carica_segnalazioni():
         df = gd.get_as_dataframe(ws, evaluate_formulas=True, header=0).dropna(how="all")
         if not df.empty:
             df = df[REQUIRED_COLUMNS]
-            # formatta data come gg/mm/aaaa
+            # formatta data come gg/mm/aaaa con gestione valori mancanti
             if "Data" in df:
-                df["Data"] = pd.to_datetime(df["Data"], errors="coerce").dt.strftime("%d/%m/%Y")
+                df["Data"] = pd.to_datetime(df["Data"], errors="coerce")
+                df["Data"] = df["Data"].dt.strftime("%d/%m/%Y").fillna("")
         else:
             df = pd.DataFrame(columns=REQUIRED_COLUMNS)
         return df
@@ -66,8 +67,8 @@ def salva_segnalazione(nome, classe, materia, criticita, data, docente, note):
         client = get_gdrive_client()
         sh = client.open(SPREADSHEET_NAME)
         ws = sh.worksheet(SEGNALAZIONI_SHEET)
-        new_row = [nome, classe, materia, criticita, data, docente, note]
-        ws.append_row(new_row, value_input_option="USER_ENTERED")
+        new_row = [nome or "", classe or "", materia or "", criticita or "", data or "", docente or "", note or ""]
+        ws.append_row(new_row, value_input_option="RAW")
         return True
     except Exception as e:
         st.error(f"Errore nel salvataggio: {e}")
@@ -143,7 +144,11 @@ if menu == "➕ Inserisci Segnalazione":
 
         materia = st.selectbox("📚 Materia", [""] + materie_list)
         criticita = st.selectbox("⚠️ Criticità", [""] + criticita_list)
-        data = st.date_input("📅 Data", datetime.today()).strftime("%d/%m/%Y")
+
+        # uso formato ISO per storage, formatteremo per l'UI al caricamento
+        date_obj = st.date_input("📅 Data", datetime.today())
+        data = date_obj.strftime("%Y-%m-%d")
+
         docente = st.text_input("👩‍🏫 Docente", value="A.Q.")
         note = st.text_area("📝 Note aggiuntive")
 
