@@ -185,6 +185,12 @@ elif menu == "📜 Storico":
         if filtro_materia:
             df = df[df["Materia"] == filtro_materia]
 
+        # ordinamento per data (più recente in alto)
+        if "Data" in df:
+            df["Data"] = pd.to_datetime(df["Data"], errors="coerce")
+            df = df.sort_values("Data", ascending=False)
+            df["Data"] = df["Data"].dt.strftime("%d/%m/%Y").fillna("")
+
         st.dataframe(df, use_container_width=True, hide_index=True)
 
         st.download_button(
@@ -213,3 +219,10 @@ elif menu == "📊 Statistiche":
                                   .count().reset_index(name="Totale")
 
             st.bar_chart(conteggio_criticita.set_index("Criticità"))
+
+        # Trend temporale delle segnalazioni
+        st.subheader("Andamento segnalazioni nel tempo")
+        df["Data"] = pd.to_datetime(df["Data"], errors="coerce")
+        trend = df.dropna(subset=["Data"]).groupby(df["Data"].dt.to_period("M"))["Nome"].count()
+        trend.index = trend.index.to_timestamp()
+        st.line_chart(trend)
