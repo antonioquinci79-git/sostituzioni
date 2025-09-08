@@ -628,15 +628,16 @@ elif menu == "Gestione Assenze":
 
                 testo_output = "Buongiorno, supplenze.©\n\n"
                 for ora, gruppo in tabella_df.groupby("Ora"):
-                    testo_output += f"🕐 *{ora} ORA*\n"
-                    for _, row in gruppo.iterrows():
-                        sostituto = row['Sostituto'] if row['Sostituto'] != "Nessuno" else "—"
-                        testo_output += f"Classe {row['Classe']}\n"
-                        testo_output += f"👩‍🏫 Assente: {row['Assente']}\n"
-                        testo_output += f"✅ Sostituzione: {sostituto}\n\n"
-                testo_output = testo_output.strip()
+                    # Mostra l'ora solo se esiste almeno un docente assente
+                    if not gruppo.empty:
+                        testo_output += f"🕐 *{ora} ORA*\n"
+                        for _, row in gruppo.iterrows():
+                            sostituto = row['Sostituto'] if row['Sostituto'] != "Nessuno" else "—"
+                            testo_output += f"Classe {row['Classe']}\n"
+                            testo_output += f"👩‍🏫 Assente: {row['Assente']}\n"
+                            testo_output += f"✅ Sostituzione: {sostituto}\n\n"
 
-                st.text_area("Testo pronto da copiare", value=testo_output, height=300)
+                testo_output = testo_output.strip()
 
                 
 
