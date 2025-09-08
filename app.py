@@ -613,7 +613,7 @@ elif menu == "Gestione Assenze":
 
                 # evidenzia in verde i docenti di sostegno nei sostituti
                 
-                # --- VISTA A TABELLA ---
+                # --- VISTA A TABELLA (statica e leggibile per screenshot) ---
                 st.subheader("📋 Sostituzioni in tabella")
 
                 tabella_df = edited_df[["Ora", "Classe", "Assente", "Sostituto"]].copy()
@@ -621,7 +621,24 @@ elif menu == "Gestione Assenze":
                 tabella_df["Ora"] = pd.Categorical(tabella_df["Ora"], categories=ordine_ore, ordered=True)
                 tabella_df = tabella_df.sort_values(["Ora", "Classe"]).reset_index(drop=True)
 
-                st.dataframe(tabella_df, use_container_width=True, hide_index=True)
+                # Styling con zebratura e colonna Ora più stretta
+                styled_tabella = (
+                    tabella_df.style
+                        .set_table_styles([
+                            {"selector": "th.col0", "props": [("width", "50px")]},   # colonna Ora stretta
+                            {"selector": "th", "props": [("background-color", "#f0f0f0"),
+                                                         ("font-weight", "bold"),
+                                                         ("text-align", "center")]},
+                            {"selector": "td", "props": [("text-align", "center"),
+                                                         ("padding", "6px 12px")]}
+                        ])
+                        .apply(lambda x: ['background-color: #f9f9f9' if i % 2 else 'background-color: white'
+                                          for i in range(len(x))], axis=0)  # righe alternate
+                )
+
+                st.table(styled_tabella)
+
+                
 
                 # --- VISTA TESTUALE per copia/incolla (mobile-friendly) ---
                 st.subheader("📝 Sostituzioni in formato testo (mobile/copincolla)")
