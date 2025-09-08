@@ -628,7 +628,7 @@ elif menu == "Gestione Assenze":
 
                 testo_output = "Buongiorno, supplenze.©\n\n"
                 for ora, gruppo in tabella_df.groupby("Ora"):
-                    testo_output += f"🕐 *ORA: {ora}*\n"
+                    testo_output += f"🕐 *{ora} ORA*\n"
                     for _, row in gruppo.iterrows():
                         sostituto = row['Sostituto'] if row['Sostituto'] != "Nessuno" else "—"
                         testo_output += f"Classe {row['Classe']}\n"
