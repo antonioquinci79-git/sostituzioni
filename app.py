@@ -621,28 +621,25 @@ elif menu == "Gestione Assenze":
                 tabella_df["Ora"] = pd.Categorical(tabella_df["Ora"], categories=ordine_ore, ordered=True)
                 tabella_df = tabella_df.sort_values(["Ora", "Classe"]).reset_index(drop=True)
 
-                # Reset dell'index e rimozione definitiva
-                tabella_df = tabella_df.reset_index(drop=True)
-
-                # Styling con zebratura, colonna Ora e Classe strette, font più grande, senza index
+                # Styling con zebratura, colonna Ora e Classe strette, font più grande
                 styled_tabella = (
                     tabella_df.style
                         .set_table_styles([
                             {"selector": "th.col0", "props": [("width", "50px")]},    # colonna Ora stretta
-                            {"selector": "th.col1", "props": [("width", "80px")]},    # colonna Classe più stretta
+                            {"selector": "th.col1", "props": [("width", "80px")]},    # colonna Classe stretta
                             {"selector": "th", "props": [("background-color", "#f0f0f0"),
                                                          ("font-weight", "bold"),
                                                          ("text-align", "center"),
                                                          ("font-size", "16px")]},
                             {"selector": "td", "props": [("text-align", "center"),
                                                          ("padding", "6px 12px"),
-                                                         ("font-size", "14px")]}
-                        ])
+                                                         ("font-size", "16px")]}
+                        ], overwrite=False)
                         .apply(lambda x: ['background-color: #f9f9f9' if i % 2 else 'background-color: white'
                                           for i in range(len(x))], axis=0)  # righe alternate
                 )
 
-                st.table(styled_tabella)
+                st.dataframe(styled_tabella, use_container_width=True, hide_index=True)
 
 
                 
