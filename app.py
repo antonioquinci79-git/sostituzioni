@@ -627,6 +627,7 @@ elif menu == "Gestione Assenze":
                 st.subheader("📝 Sostituzioni in formato testo (mobile/copincolla)")
 
                 testo_output = "Buongiorno, supplenze.©\n\n"
+                
                 for ora, gruppo in tabella_df.groupby("Ora"):
                     # Mostra l'ora solo se esiste almeno un docente assente
                     if not gruppo.empty:
