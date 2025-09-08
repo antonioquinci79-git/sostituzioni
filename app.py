@@ -617,8 +617,6 @@ elif menu == "Gestione Assenze":
                 st.subheader("📋 Sostituzioni in tabella")
 
                 tabella_df = edited_df[["Ora", "Classe", "Assente", "Sostituto"]].copy()
-                tabella_df = tabella_df.rename(columns={"Sostituto": "Supplenza"})
-                tabella_df = tabella_df.rename(columns={"Assente": "Assenza"})
                 ordine_ore = ["I", "II", "III", "IV", "V", "VI"]
                 tabella_df["Ora"] = pd.Categorical(tabella_df["Ora"], categories=ordine_ore, ordered=True)
                 tabella_df = tabella_df.sort_values(["Ora", "Classe"]).reset_index(drop=True)
