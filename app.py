@@ -639,7 +639,7 @@ elif menu == "Gestione Assenze":
                             testo_output += f"✅ Sostituzione: {sostituto}\n\n"
 
                 testo_output = testo_output.strip()
-
+                st.text_area("Testo pronto da copiare", value=testo_output, height=300)
                 
 
                 # --- Step 1: conferma tabella (non salva ancora) ---
