@@ -639,8 +639,9 @@ elif menu == "Gestione Assenze":
                                           for i in range(len(x))], axis=0)  # righe alternate
                 )
 
-                # st.table mostra il CSS, ma per eliminare l'index dobbiamo passare il DataFrame senza index
-                st.table(styled_tabella.hide(axis="index"))
+                # Mostriamo la tabella statica in HTML, senza colonna index
+                html = styled_tabella.hide(axis="index").to_html()
+                st.markdown(html, unsafe_allow_html=True)
 
 
                 
