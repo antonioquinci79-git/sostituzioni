@@ -617,6 +617,7 @@ elif menu == "Gestione Assenze":
                 st.subheader("📋 Sostituzioni in tabella")
 
                 tabella_df = edited_df[["Ora", "Classe", "Assente", "Sostituto"]].copy()
+                tabella_df = tabella_df.rename(columns={"Sostituto": "Sostituzione"})
                 ordine_ore = ["I", "II", "III", "IV", "V", "VI"]
                 tabella_df["Ora"] = pd.Categorical(tabella_df["Ora"], categories=ordine_ore, ordered=True)
                 tabella_df = tabella_df.sort_values(["Ora", "Classe"]).reset_index(drop=True)
@@ -656,7 +657,7 @@ elif menu == "Gestione Assenze":
                     if not gruppo.empty:
                         testo_output += f"🕐 *{ora} ORA*\n"
                         for _, row in gruppo.iterrows():
-                            sostituto = row['Sostituto'] if row['Sostituto'] != "Nessuno" else "—"
+                            sostituto = row['Sostituzione'] if row['Sostituzione'] != "Nessuno" else "—"
                             testo_output += f"Classe {row['Classe']}\n"
                             testo_output += f"👩‍🏫 Assente: {row['Assente']}\n"
                             testo_output += f"✅ Sostituzione: {sostituto}\n\n"
