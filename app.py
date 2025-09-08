@@ -634,6 +634,7 @@ elif menu == "Gestione Assenze":
                         ])
                         .apply(lambda x: ['background-color: #f9f9f9' if i % 2 else 'background-color: white'
                                           for i in range(len(x))], axis=0)  # righe alternate
+                        .hide(axis="index")  # nascondi colonna index
                 )
 
                 st.table(styled_tabella)
