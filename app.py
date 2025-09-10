@@ -8,6 +8,37 @@ from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 
 # =========================
+# STILI PERSONALIZZATI
+# =========================
+st.markdown("""
+<style>
+/* Bottoni più grandi */
+.stButton button {
+    width: 100%;
+    padding: 0.8em;
+    font-size: 1.05em;
+    border-radius: 12px;
+}
+
+/* Tabelle: font più piccolo e leggibile */
+.stDataFrame, .stDataEditor {
+    font-size: 0.9em !important;
+}
+
+/* Input: allarga i selectbox */
+.stSelectbox, .stTextInput, .stDateInput, .stMultiSelect {
+    width: 100% !important;
+}
+
+/* Margini orizzontali per respirare su mobile */
+.block-container {
+    padding-left: 1rem;
+    padding-right: 1rem;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# =========================
 # CONFIGURAZIONE FILE / SHEETS
 # =========================
 REQUIRED_COLUMNS = ["Docente", "Giorno", "Ora", "Classe", "Tipo", "Escludi"]
@@ -318,7 +349,7 @@ def vista_pivot_docenti(df, mode="docenti"):
 # =========================
 # AVVIO APP
 # =========================
-st.title("📚 Gestione orari e Sostituzioni Docenti (Google Sheets)")
+st.title("📚Sostituzioni docenti")
 # assicurati che i fogli esistano con le intestazioni
 try:
     with st.spinner('Caricamento dati...'):
@@ -330,12 +361,13 @@ with st.spinner('Caricamento orario...'):
     orario_df = carica_orario()
 
 # =========================
-# MENU PRINCIPALE
+# MENU PRINCIPALE (mobile-friendly)
 # =========================
-menu = st.sidebar.radio(
-    "Naviga",
+menu = st.sidebar.selectbox(
+    "📌 Naviga",
     ["Inserisci/Modifica Orario", "Gestione Assenze", "Visualizza Orario", "Statistiche"]
 )
+
 
 # --- INSERIMENTO/MODIFICA ORARIO ---
 if menu == "Inserisci/Modifica Orario":
@@ -580,40 +612,59 @@ elif menu == "Gestione Assenze":
                     edited_df.at[idx, "Sostituto"] = scelta.replace("[S] ", "")
 
                 # evidenzia in verde i docenti di sostegno nei sostituti
-                def evidenzia_sostegno_docente(val):
-                    if val in orario_df[orario_df["Tipo"] == "Sostegno"]["Docente"].unique():
-                        return "color: green; font-weight: bold;"
-                    return ""
+                
+                # --- VISTA A TABELLA (statica e leggibile per screenshot) ---
+                st.subheader("📋 Sostituzioni in tabella")
 
-                edited_df = edited_df.sort_values("Ora").reset_index(drop=True)
-                styled_sostituzioni = edited_df.style.map(evidenzia_sostegno_docente, subset=["Sostituto"])
-                st.dataframe(styled_sostituzioni, use_container_width=True, hide_index=True)
+                tabella_df = edited_df[["Ora", "Classe", "Assente", "Sostituto"]].copy()
+                tabella_df = tabella_df.rename(columns={"Sostituto": "Sostituzione"})
+                ordine_ore = ["I", "II", "III", "IV", "V", "VI"]
+                tabella_df["Ora"] = pd.Categorical(tabella_df["Ora"], categories=ordine_ore, ordered=True)
+                tabella_df = tabella_df.sort_values(["Ora", "Classe"]).reset_index(drop=True)
 
-                # Testo WhatsApp
-                edited_df_sorted = edited_df.copy()
-
-                mesi_it = {
-                    1: "Gennaio", 2: "Febbraio", 3: "Marzo", 4: "Aprile",
-                    5: "Maggio", 6: "Giugno", 7: "Luglio", 8: "Agosto",
-                    9: "Settembre", 10: "Ottobre", 11: "Novembre", 12: "Dicembre"
-                }
-
-                giorno_num = data_sostituzione.day
-                mese_nome = mesi_it[data_sostituzione.month]
-                anno = data_sostituzione.year
-                data_estesa = f"{giorno_assente} {giorno_num} {mese_nome} {anno}"
-
-                testo = f"Sostituzioni per {data_estesa}:\n\n"
-                for _, row in edited_df_sorted.iterrows():
-                    testo += f"• Classe {row['Classe']} – {row['Ora']} ora (assente: {row['Assente']}) → {row['Sostituto']}\n"
-
-                st.subheader("📤 Testo per WhatsApp (copia e modifica)")
-                st.text_area(
-                    "Modifica qui il messaggio prima di copiarlo:",
-                    testo.strip(),
-                    height=200,
-                    key="whatsapp_text_area"
+                # Applichiamo lo stile con Styler e lo mostriamo con st.table
+                styled_tabella = (
+                    tabella_df.style
+                        .set_table_styles([
+                            {"selector": "th.col0", "props": [("width", "50px")]},   # colonna Ora stretta
+                            {"selector": "th.col1", "props": [("width", "80px")]},   # colonna Classe stretta
+                            {"selector": "th", "props": [("background-color", "#f0f0f0"),
+                                                         ("font-weight", "bold"),
+                                                         ("text-align", "center"),
+                                                         ("font-size", "16px")]},
+                            {"selector": "td", "props": [("text-align", "center"),
+                                                         ("padding", "6px 12px"),
+                                                         ("font-size", "16px")]}
+                        ])
+                        .apply(lambda x: ['background-color: #f9f9f9' if i % 2 else 'background-color: white'
+                                          for i in range(len(x))], axis=0)  # righe alternate
                 )
+
+                # Mostriamo la tabella statica in HTML, senza colonna index
+                html = styled_tabella.hide(axis="index").to_html()
+                st.markdown(html, unsafe_allow_html=True)
+
+
+                
+
+                # --- VISTA TESTUALE per copia/incolla (mobile-friendly) ---
+                st.subheader("📝 Sostituzioni in formato testo (mobile/copincolla)")
+
+                testo_output = "Buongiorno, supplenze.©\n\n"
+                
+                for ora, gruppo in tabella_df.groupby("Ora"):
+                    # Mostra l'ora solo se esiste almeno un docente assente
+                    if not gruppo.empty:
+                        testo_output += f"🕐 *{ora} ORA*\n"
+                        for _, row in gruppo.iterrows():
+                            sostituto = row['Sostituzione'] if row['Sostituzione'] != "Nessuno" else "—"
+                            testo_output += f"Classe {row['Classe']}\n"
+                            testo_output += f"👩‍🏫 Assente: {row['Assente']}\n"
+                            testo_output += f"✅ Sostituzione: {sostituto}\n\n"
+
+                testo_output = testo_output.strip()
+                st.text_area("Testo pronto da copiare", value=testo_output, height=300)
+                
 
                 # --- Step 1: conferma tabella (non salva ancora) ---
                 if st.button("✅ Conferma tabella (non salva ancora)"):
@@ -668,6 +719,8 @@ elif menu == "Visualizza Orario":
     else:
         vista_pivot_docenti(orario_df, mode="classi")
         download_orario(orario_df)
+
+
 
 # --- STATISTICHE ---
 elif menu == "Statistiche":
