@@ -657,26 +657,42 @@ elif menu == "Gestione Assenze":
 
                 st.text_area("Testo pronto da copiare", value=testo_output.strip(), height=300)
 
-                # --- Step 1: conferma (controllo conflitti: stesso docente assegnato a più classi nella stessa ora) ---
+                # --- Step 1: conferma (controllo conflitti) ---
                 if st.button("✅ Conferma tabella (non salva ancora)"):
-                    edited_df_sorted = tabella_df.copy()
-                    conflitti = []
-                    # useremo il nome pulito per il controllo (Sostituto senza prefissi)
-                    # ricaviamolo dalla sostituzioni_df
                     check_df = sostituzioni_df.copy()
+                    conflitti = []
+                    conflitti_orario = []
+
                     for ora_val in check_df["Ora"].unique():
                         assegnazioni = check_df[check_df["Ora"] == ora_val]
                         sostituti = [s for s in assegnazioni["Sostituto"] if s not in ["Nessuno", "", "—"]]
+
+                        # 1) Conflitto: stesso docente scelto su più classi nella stessa ora
                         duplicati = [s for s in sostituti if sostituti.count(s) > 1]
                         if duplicati:
                             conflitti.append((ora_val, list(set(duplicati))))
 
-                    if conflitti:
-                        st.error("⚠️ Errore: lo stesso docente è stato assegnato a più classi nella stessa ora:")
-                        for ora_c, docs in conflitti:
-                            st.write(f"- Ora {ora_c}: {', '.join(docs)}")
+                        # 2) Conflitto: docente scelto ma già in orario in quell’ora
+                        for s in sostituti:
+                            if not orario_df[
+                                (orario_df["Docente"] == s) &
+                                (orario_df["Giorno"] == giorno_assente) &
+                                (orario_df["Ora"] == ora_val)
+                            ].empty:
+                                conflitti_orario.append((ora_val, s))
+
+                    if conflitti or conflitti_orario:
+                        if conflitti:
+                            st.error("⚠️ Errore: lo stesso docente è stato assegnato a più classi nella stessa ora:")
+                            for ora_c, docs in conflitti:
+                                st.write(f"- Ora {ora_c}: {', '.join(docs)}")
+                        if conflitti_orario:
+                            st.error("⚠️ Errore: alcuni docenti scelti come supplenti hanno già lezione in quell’ora:")
+                            for ora_c, docente in conflitti_orario:
+                                st.write(f"- Ora {ora_c}: {docente} è già impegnato in orario")
                         st.stop()
 
+                    # se tutto ok salvo in session_state
                     st.session_state["sostituzioni_confermate"] = sostituzioni_df.copy()
                     st.session_state["ore_assenti_confermate"] = ore_assenti.copy()
                     st.session_state["data_sostituzione_tmp"] = data_sostituzione
