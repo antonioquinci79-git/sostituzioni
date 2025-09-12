@@ -620,6 +620,186 @@ elif menu == "Gestione Assenze":
                         giorno_tmp = st.session_state.get("giorno_assente_tmp")
 
                         if sost_df is not None and ore_assenti_session is not None:
+# --- GESTIONE ASSENZE ---
+elif menu == "Gestione Assenze":
+    st.header("🚨 Gestione Assenze")
+
+    if orario_df.empty:
+        st.warning("Non hai ancora caricato nessun orario.")
+    else:
+        docenti_assenti = st.multiselect("Seleziona docenti assenti", sorted(orario_df["Docente"].unique()))
+        data_sostituzione = st.date_input("Data della sostituzione")
+
+        # giorno calcolato automaticamente dalla data (in italiano)
+        giorno_assente = data_sostituzione.strftime("%A")
+        traduzione_giorni = {
+            "Monday": "Lunedì",
+            "Tuesday": "Martedì",
+            "Wednesday": "Mercoledì",
+            "Thursday": "Giovedì",
+            "Friday": "Venerdì",
+            "Saturday": "Sabato",
+            "Sunday": "Domenica"
+        }
+        giorno_assente = traduzione_giorni.get(giorno_assente, giorno_assente)
+
+        if not docenti_assenti:
+            st.info("Seleziona almeno un docente per continuare.")
+        else:
+            # Ore scoperte
+            ore_assenti = orario_df[
+                (orario_df["Docente"].isin(docenti_assenti)) &
+                (orario_df["Giorno"] == giorno_assente)
+            ]
+
+            if ore_assenti.empty:
+                st.info("I docenti selezionati non hanno lezioni in quel giorno.")
+            else:
+                st.subheader("📌 Ore scoperte")
+                st.dataframe(ore_assenti[["Docente", "Ora", "Classe", "Tipo"]],
+                             use_container_width=True, hide_index=True)
+
+                st.subheader("🔄 Possibili sostituti")
+                sostituzioni = []
+                with st.spinner('Caricamento statistiche...'):
+                    df_storico, df_assenze = carica_statistiche()
+
+                for _, row in ore_assenti.iterrows():
+                    ora_attuale = row["Ora"]
+                    classe_attuale = row["Classe"]
+
+                    # Tutti i docenti (tranne gli assenti e gli esclusi)
+                    esclusi = set(orario_df[orario_df["Escludi"]]["Docente"].unique())
+                    candidati = set(orario_df["Docente"].unique()) - set(docenti_assenti) - esclusi
+
+                    proposti = []
+
+                    # --- PRIORITÀ ---
+
+                    # 1) Sostegni della stessa classe e ora
+                    sostegni_stessa_classe = set(orario_df[
+                        (orario_df["Giorno"] == giorno_assente) &
+                        (orario_df["Ora"] == ora_attuale) &
+                        (orario_df["Classe"] == classe_attuale) &
+                        (orario_df["Tipo"] == "Sostegno")
+                    ]["Docente"].unique())
+                    for d in candidati:
+                        if d in sostegni_stessa_classe:
+                            proposti.append(f"{d} [S]")
+
+                    # 2) Altri sostegni presenti in quell’ora
+                    altri_sostegni = set(orario_df[
+                        (orario_df["Giorno"] == giorno_assente) &
+                        (orario_df["Ora"] == ora_attuale) &
+                        (orario_df["Tipo"] == "Sostegno")
+                    ]["Docente"].unique())
+                    for d in candidati:
+                        if d in altri_sostegni and f"{d} [S]" not in proposti:
+                            proposti.append(f"{d} [S]")
+
+                    # 3) Curricolari presenti in quell’ora
+                    curricolari_presenti = set(orario_df[
+                        (orario_df["Giorno"] == giorno_assente) &
+                        (orario_df["Ora"] == ora_attuale) &
+                        (orario_df["Tipo"] != "Sostegno")
+                    ]["Docente"].unique())
+                    for d in candidati:
+                        if d in curricolari_presenti and f"{d} [C]" not in proposti:
+                            proposti.append(f"{d} [C]")
+
+                    # 4) Docenti non presenti in quell’ora (ma in orario nel giorno)
+                    docenti_in_giorno = set(orario_df[
+                        (orario_df["Giorno"] == giorno_assente)
+                    ]["Docente"].unique())
+                    for d in candidati:
+                        if d in docenti_in_giorno and d not in presenti_in_ora:
+                            tipo = orario_df.loc[orario_df["Docente"] == d, "Tipo"].iloc[0]
+                            tag = "[S]" if tipo == "Sostegno" else "[C]"
+                            if f"{d} {tag}" not in proposti and f"{d} {tag} [NP]" not in proposti:
+                                proposti.append(f"{d} {tag} [NP]")
+
+                    # Se nessuno disponibile
+                    if not proposti:
+                        proposti = ["Nessuno"]
+
+                    sostituzioni.append({
+                        "Ora": ora_attuale,
+                        "Classe": classe_attuale,
+                        "Assente": row["Docente"],
+                        "Sostituto": proposti[0],
+                        "Opzioni": proposti
+                    })
+
+                sostituzioni_df = pd.DataFrame(sostituzioni)
+
+                # Ordina per ora
+                ordine_ore = ["I", "II", "III", "IV", "V", "VI"]
+                if not sostituzioni_df.empty:
+                    sostituzioni_df["Ora"] = pd.Categorical(sostituzioni_df["Ora"], categories=ordine_ore, ordered=True)
+                    sostituzioni_df = sostituzioni_df.sort_values("Ora").reset_index(drop=True)
+
+                # Editor: selectbox con tutte le opzioni disponibili
+                edited_df = sostituzioni_df.copy()
+                for idx, riga in sostituzioni_df.iterrows():
+                    scelta = st.selectbox(
+                        f"Sostituto per {riga['Ora']} ora - Classe {riga['Classe']} (assente {riga['Assente']})",
+                        riga["Opzioni"],
+                        index=0,
+                        key=f"select_{idx}"
+                    )
+                    edited_df.at[idx, "Sostituto"] = scelta
+
+                # --- VISTA TABELLA ---
+                st.subheader("📋 Sostituzioni in tabella")
+                tabella_df = edited_df[["Ora", "Classe", "Assente", "Sostituto"]].copy()
+                tabella_df = tabella_df.rename(columns={"Sostituto": "Sostituzione"})
+                tabella_df["Ora"] = pd.Categorical(tabella_df["Ora"], categories=ordine_ore, ordered=True)
+                tabella_df = tabella_df.sort_values(["Ora", "Classe"]).reset_index(drop=True)
+                st.dataframe(tabella_df, use_container_width=True, hide_index=True)
+
+                # --- VISTA TESTUALE ---
+                st.subheader("📝 Sostituzioni in formato testo (mobile/copincolla)")
+                testo_output = "Buongiorno, supplenze.©\n\n"
+                for ora, gruppo in tabella_df.groupby("Ora"):
+                    if not gruppo.empty:
+                        testo_output += f"🕐 *{ora} ORA*\n"
+                        for _, row in gruppo.iterrows():
+                            sostituto = row['Sostituzione'] if row['Sostituzione'] != "Nessuno" else "—"
+                            testo_output += f"Classe {row['Classe']}\n"
+                            testo_output += f"👩‍🏫 Assente: {row['Assente']}\n"
+                            testo_output += f"✅ Sostituzione: {sostituto}\n\n"
+                st.text_area("Testo pronto da copiare", value=testo_output.strip(), height=300)
+
+                # --- Step 1: conferma ---
+                if st.button("✅ Conferma tabella (non salva ancora)"):
+                    edited_df_sorted = tabella_df.copy()
+                    conflitti = []
+                    for ora in edited_df_sorted["Ora"].unique():
+                        assegnazioni = edited_df_sorted[edited_df_sorted["Ora"] == ora]
+                        sostituti = [s for s in assegnazioni["Sostituzione"] if s != "Nessuno"]
+                        duplicati = [s for s in sostituti if sostituti.count(s) > 1]
+                        if duplicati:
+                            st.error("⚠️ Errore: lo stesso docente è stato assegnato a più classi nella stessa ora:")
+                            for ora, docs in conflitti:
+                                st.write(f"- Ora {ora}: {', '.join(docs)}")
+                            st.stop()
+
+                    st.session_state["sostituzioni_confermate"] = edited_df.copy()
+                    st.session_state["ore_assenti_confermate"] = ore_assenti.copy()
+                    st.session_state["data_sostituzione_tmp"] = data_sostituzione
+                    st.session_state["giorno_assente_tmp"] = giorno_assente
+
+                    st.success("Tabella confermata ✅ Ora puoi salvarla nello storico.")
+
+                # --- Step 2: Salva nello storico ---
+                if st.session_state.get("sostituzioni_confermate") is not None:
+                    if st.button("💾 Salva nello storico", key="save_storico_main"):
+                        sost_df = st.session_state.get("sostituzioni_confermate")
+                        ore_assenti_session = st.session_state.get("ore_assenti_confermate")
+                        data_tmp = st.session_state.get("data_sostituzione_tmp")
+                        giorno_tmp = st.session_state.get("giorno_assente_tmp")
+
+                        if sost_df is not None and ore_assenti_session is not None:
                             if salva_storico_assenze(data_tmp, giorno_tmp, sost_df, ore_assenti_session):
                                 st.success("Assenze e sostituzioni salvate nello storico ✅")
                                 for k in ["sostituzioni_confermate", "ore_assenti_confermate",
