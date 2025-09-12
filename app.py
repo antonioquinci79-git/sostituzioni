@@ -644,14 +644,16 @@ elif menu == "Gestione Assenze":
                 # --- VISTA TESTUALE ---
                 st.subheader("📝 Sostituzioni in formato testo (mobile/copincolla)")
                 testo_output = "Buongiorno, supplenze.©\n\n"
-                for ora, gruppo in tabella_df.groupby("Ora"):
+
+                # uso sostituzioni_df che ha sia display che nome pulito
+                for ora, gruppo in sostituzioni_df.groupby("Ora"):
                     if not gruppo.empty:
                         testo_output += f"🕐 *{ora} ORA*\n"
                         for _, r in gruppo.iterrows():
-                            sost_display = r['Sostituzione'] if r['Sostituzione'] != "Nessuno" else "—"
+                            sost_pulito = r['Sostituto'] if r['Sostituto'] not in ["Nessuno", "", "—"] else "—"
                             testo_output += f"Classe {r['Classe']}\n"
                             testo_output += f"👩‍🏫 Assente: {r['Assente']}\n"
-                            testo_output += f"✅ Sostituzione: {sost_display}\n\n"
+                            testo_output += f"✅ Sostituzione: {sost_pulito}\n\n"
 
                 st.text_area("Testo pronto da copiare", value=testo_output.strip(), height=300)
 
