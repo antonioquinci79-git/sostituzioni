@@ -678,6 +678,64 @@ elif menu == "Gestione Assenze":
 
                     # 1) Sostegni della stessa classe e ora
                     sostegni_stessa_classe = set(orario_df[
+                        (orario_df["Giorno"]# --- GESTIONE ASSENZE ---
+elif menu == "Gestione Assenze":
+    st.header("🚨 Gestione Assenze")
+
+    if orario_df.empty:
+        st.warning("Non hai ancora caricato nessun orario.")
+    else:
+        docenti_assenti = st.multiselect("Seleziona docenti assenti", sorted(orario_df["Docente"].unique()))
+        data_sostituzione = st.date_input("Data della sostituzione")
+
+        # giorno calcolato automaticamente dalla data (in italiano)
+        giorno_assente = data_sostituzione.strftime("%A")
+        traduzione_giorni = {
+            "Monday": "Lunedì",
+            "Tuesday": "Martedì",
+            "Wednesday": "Mercoledì",
+            "Thursday": "Giovedì",
+            "Friday": "Venerdì",
+            "Saturday": "Sabato",
+            "Sunday": "Domenica"
+        }
+        giorno_assente = traduzione_giorni.get(giorno_assente, giorno_assente)
+
+        if not docenti_assenti:
+            st.info("Seleziona almeno un docente per continuare.")
+        else:
+            # Ore scoperte
+            ore_assenti = orario_df[
+                (orario_df["Docente"].isin(docenti_assenti)) &
+                (orario_df["Giorno"] == giorno_assente)
+            ]
+
+            if ore_assenti.empty:
+                st.info("I docenti selezionati non hanno lezioni in quel giorno.")
+            else:
+                st.subheader("📌 Ore scoperte")
+                st.dataframe(ore_assenti[["Docente", "Ora", "Classe", "Tipo"]],
+                             use_container_width=True, hide_index=True)
+
+                st.subheader("🔄 Possibili sostituti")
+                sostituzioni = []
+                with st.spinner('Caricamento statistiche...'):
+                    df_storico, df_assenze = carica_statistiche()
+
+                for _, row in ore_assenti.iterrows():
+                    ora_attuale = row["Ora"]
+                    classe_attuale = row["Classe"]
+
+                    # Tutti i docenti (tranne gli assenti e gli esclusi)
+                    esclusi = set(orario_df[orario_df["Escludi"]]["Docente"].unique())
+                    candidati = set(orario_df["Docente"].unique()) - set(docenti_assenti) - esclusi
+
+                    proposti = []
+
+                    # --- PRIORITÀ ---
+
+                    # 1) Sostegni della stessa classe e ora
+                    sostegni_stessa_classe = set(orario_df[
                         (orario_df["Giorno"] == giorno_assente) &
                         (orario_df["Ora"] == ora_attuale) &
                         (orario_df["Classe"] == classe_attuale) &
@@ -809,6 +867,7 @@ elif menu == "Gestione Assenze":
                                     st.rerun()
                                 except Exception:
                                     pass
+
 
 
 
