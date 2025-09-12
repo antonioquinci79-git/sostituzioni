@@ -672,14 +672,17 @@ elif menu == "Gestione Assenze":
                         if duplicati:
                             conflitti.append((ora_val, list(set(duplicati))))
 
-                        # 2) Conflitto: docente scelto ma già in orario in quell’ora
+                        # 2) Conflitto: docente scelto ma già in orario in quell’ora (SOLO curricolari)
                         for s in sostituti:
-                            if not orario_df[
-                                (orario_df["Docente"] == s) &
-                                (orario_df["Giorno"] == giorno_assente) &
-                                (orario_df["Ora"] == ora_val)
-                            ].empty:
-                                conflitti_orario.append((ora_val, s))
+                            # recupero il tipo del docente
+                            tipo = orario_df.loc[orario_df["Docente"] == s, "Tipo"].astype(str).str.lower().iloc[0] if not orario_df.loc[orario_df["Docente"] == s].empty else ""
+                            if tipo != "sostegno":
+                                if not orario_df[
+                                    (orario_df["Docente"] == s) &
+                                    (orario_df["Giorno"] == giorno_assente) &
+                                    (orario_df["Ora"] == ora_val)
+                                ].empty:
+                                    conflitti_orario.append((ora_val, s))
 
                     if conflitti or conflitti_orario:
                         if conflitti:
@@ -687,7 +690,7 @@ elif menu == "Gestione Assenze":
                             for ora_c, docs in conflitti:
                                 st.write(f"- Ora {ora_c}: {', '.join(docs)}")
                         if conflitti_orario:
-                            st.error("⚠️ Errore: alcuni docenti scelti come supplenti hanno già lezione in quell’ora:")
+                            st.error("⚠️ Errore: alcuni docenti curricolari scelti come supplenti hanno già lezione in quell’ora:")
                             for ora_c, docente in conflitti_orario:
                                 st.write(f"- Ora {ora_c}: {docente} è già impegnato in orario")
                         st.stop()
@@ -699,6 +702,7 @@ elif menu == "Gestione Assenze":
                     st.session_state["giorno_assente_tmp"] = giorno_assente
 
                     st.success("Tabella confermata ✅ Ora puoi salvarla nello storico.")
+
 
                 # --- Step 2: Salva nello storico ---
                 if st.session_state.get("sostituzioni_confermate") is not None:
