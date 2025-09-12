@@ -481,79 +481,69 @@ elif menu == "Gestione Assenze":
             else:
                 st.subheader("📌 Ore scoperte")
 
-                def evidenzia_sostegno(val, tipo):
-                    if tipo == "Sostegno":
-                        return "color: green; font-weight: bold;"
-                    return ""
-
-                styled_ore_assenti = ore_assenti[["Docente", "Ora", "Classe", "Tipo"]].style.apply(
-                    lambda col: [evidenzia_sostegno(v, t) for v, t in zip(ore_assenti["Docente"], ore_assenti["Tipo"])],
-                    axis=0
-                )
+                styled_ore_assenti = ore_assenti[["Docente", "Ora", "Classe", "Tipo"]]
                 st.dataframe(styled_ore_assenti, use_container_width=True, hide_index=True)
 
                 st.subheader("🔄 Possibili sostituti")
                 sostituzioni = []
-                # Carica storico per prioritizzazione del carico (come in app.py)
                 with st.spinner('Caricamento statistiche...'):
                     df_storico, df_assenze = carica_statistiche()
-                storici = pd.DataFrame()
-                if not df_storico.empty:
-                    storici = df_storico.groupby("docente")["ore"].sum().reset_index().rename(columns={"ore": "total"})
-                # Itera le ore scoperte e propone sostituti
-                for _, row in ore_assenti.iterrows():
-                    # Tutti i docenti
-                    tutti_docenti = set(orario_df["Docente"].unique())
 
-                    # Docenti occupati in quell'ora
-                    docenti_occupati = set(orario_df[
+                for _, row in ore_assenti.iterrows():
+                    ora_attuale = row["Ora"]
+                    classe_attuale = row["Classe"]
+
+                    # 1. Docenti presenti in quell'ora (qualsiasi classe/tipo)
+                    presenti_in_ora = set(orario_df[
                         (orario_df["Giorno"] == giorno_assente) &
-                        (orario_df["Ora"] == row["Ora"])
+                        (orario_df["Ora"] == ora_attuale)
                     ]["Docente"].unique())
 
-                    # Docenti disponibili = tutti - occupati - assenti
-                    docenti_disponibili = list(tutti_docenti - docenti_occupati - set(docenti_assenti))
+                    # 2. Rimuovi assenti
+                    candidati = presenti_in_ora - set(docenti_assenti)
 
-                    # Filtra il dataframe per i docenti disponibili
-                    df_disponibili = orario_df[orario_df["Docente"].isin(docenti_disponibili)]
+                    # 3. Rimuovi chi ha spunta Escludi
+                    esclusi = set(orario_df[orario_df["Escludi"]]["Docente"].unique())
+                    candidati = candidati - esclusi
 
-                    proposto = "Nessuno"
-                    if not df_disponibili.empty:
-                        # Priorità 1: stesso sostegno di quella classe
-                        prioritari_sostegno = df_disponibili[
-                            (df_disponibili["Tipo"] == "Sostegno") &
-                            (df_disponibili["Classe"] == row["Classe"]) &
-                            (~df_disponibili["Escludi"])
-                        ]
-                        if not prioritari_sostegno.empty:
-                            proposto = prioritari_sostegno["Docente"].iloc[0]
-                        else:
-                            # Priorità 2: altri sostegni
-                            altri_sostegno = df_disponibili[
-                                (df_disponibili["Tipo"] == "Sostegno") &
-                                (~df_disponibili["Escludi"])
-                            ]
-                            if not altri_sostegno.empty:
-                                proposto = altri_sostegno.sort_values("Docente")["Docente"].iloc[0]
-                            else:
-                                # Priorità 3: docenti curricolari
-                                non_sostegno = df_disponibili[
-                                    (df_disponibili["Tipo"] != "Sostegno") &
-                                    (~df_disponibili["Escludi"])
-                                ]
-                                if not non_sostegno.empty:
-                                    proposto = non_sostegno.sort_values("Docente")["Docente"].iloc[0]
-                                else:
-                                    # Priorità 4: docenti esclusi
-                                    esclusi = df_disponibili[df_disponibili["Escludi"]]
-                                    if not esclusi.empty:
-                                        proposto = esclusi.sort_values("Docente")["Docente"].iloc[0]
+                    # --- Priorità ---
+                    proposti = []
+
+                    # a) Sostegni della stessa classe e ora
+                    sostegni_stessa_classe = set(orario_df[
+                        (orario_df["Giorno"] == giorno_assente) &
+                        (orario_df["Ora"] == ora_attuale) &
+                        (orario_df["Classe"] == classe_attuale) &
+                        (orario_df["Tipo"] == "Sostegno")
+                    ]["Docente"].unique())
+                    proposti += [d for d in candidati if d in sostegni_stessa_classe]
+
+                    # b) Altri sostegni presenti in quell’ora
+                    altri_sostegni = set(orario_df[
+                        (orario_df["Giorno"] == giorno_assente) &
+                        (orario_df["Ora"] == ora_attuale) &
+                        (orario_df["Tipo"] == "Sostegno")
+                    ]["Docente"].unique())
+                    proposti += [d for d in candidati if d in altri_sostegni and d not in proposti]
+
+                    # c) In coda: docenti curricolari presenti in quell’ora
+                    curricolari_presenti = set(orario_df[
+                        (orario_df["Giorno"] == giorno_assente) &
+                        (orario_df["Ora"] == ora_attuale) &
+                        (orario_df["Tipo"] != "Sostegno")
+                    ]["Docente"].unique())
+                    proposti += [d for d in candidati if d in curricolari_presenti and d not in proposti]
+
+                    # Se nessuno disponibile
+                    if not proposti:
+                        proposti = ["Nessuno"]
 
                     sostituzioni.append({
-                        "Ora": row["Ora"],
-                        "Classe": row["Classe"],
+                        "Ora": ora_attuale,
+                        "Classe": classe_attuale,
                         "Assente": row["Docente"],
-                        "Sostituto": proposto
+                        "Sostituto": proposti[0],
+                        "Opzioni": proposti
                     })
 
                 sostituzioni_df = pd.DataFrame(sostituzioni)
@@ -564,80 +554,28 @@ elif menu == "Gestione Assenze":
                     sostituzioni_df["Ora"] = pd.Categorical(sostituzioni_df["Ora"], categories=ordine_ore, ordered=True)
                     sostituzioni_df = sostituzioni_df.sort_values("Ora").reset_index(drop=True)
 
-                # Editor: per ogni riga, mostra selectbox con opzioni coerenti (inclusi [S])
+                # Editor: selectbox con tutte le opzioni disponibili
                 edited_df = sostituzioni_df.copy()
                 for idx, riga in sostituzioni_df.iterrows():
-                    # Docenti disponibili effettivi in quell'ora
-                    tutti_docenti = set(orario_df["Docente"].unique())
-                    docenti_occupati = set(orario_df[
-                        (orario_df["Giorno"] == giorno_assente) &
-                        (orario_df["Ora"] == riga["Ora"])
-                    ]["Docente"].unique())
-                    disponibili_ora = list(tutti_docenti - docenti_occupati - set(docenti_assenti))
-
-                    # Lista sostegni
-                    sostegni = orario_df[orario_df["Tipo"] == "Sostegno"]["Docente"].unique()
-
-                    # Costruisci opzioni
-                    opzioni_validi = []
-                    for d in disponibili_ora:
-                        if not orario_df.loc[orario_df["Docente"] == d, "Escludi"].any():
-                            if d in sostegni:
-                                opzioni_validi.append(f"[S] {d}")
-                            else:
-                                opzioni_validi.append(d)
-
-                    # Docenti esclusi (liberi in quell’ora)
-                    esclusi = [d for d in disponibili_ora if orario_df.loc[orario_df["Docente"] == d, "Escludi"].any()]
-
-                    opzioni = ["Nessuno"] + sorted(
-                        opzioni_validi,
-                        key=lambda x: (0 if x.startswith("[S]") else 1, x)
-                    ) + sorted(esclusi)
-
-                    # Mantieni coerenza con il proposto
-                    proposto = riga["Sostituto"]
-                    proposto_display = f"[S] {proposto}" if proposto in sostegni else proposto
-
                     scelta = st.selectbox(
                         f"Sostituto per {riga['Ora']} ora - Classe {riga['Classe']} (assente {riga['Assente']})",
-                        opzioni,
-                        index=opzioni.index(proposto_display) if proposto_display in opzioni else 0,
+                        riga["Opzioni"],
+                        index=0,
                         key=f"select_{idx}"
                     )
-
-                    edited_df.at[idx, "Sostituto"] = scelta.replace("[S] ", "")
+                    edited_df.at[idx, "Sostituto"] = scelta
 
                 # --- VISTA TABELLA ---
                 st.subheader("📋 Sostituzioni in tabella")
-
                 tabella_df = edited_df[["Ora", "Classe", "Assente", "Sostituto"]].copy()
                 tabella_df = tabella_df.rename(columns={"Sostituto": "Sostituzione"})
                 tabella_df["Ora"] = pd.Categorical(tabella_df["Ora"], categories=ordine_ore, ordered=True)
                 tabella_df = tabella_df.sort_values(["Ora", "Classe"]).reset_index(drop=True)
 
-                styled_tabella = (
-                    tabella_df.style
-                        .set_table_styles([
-                            {"selector": "th.col0", "props": [("width", "50px")]},
-                            {"selector": "th.col1", "props": [("width", "80px")]},
-                            {"selector": "th", "props": [("background-color", "#f0f0f0"),
-                                                         ("font-weight", "bold"),
-                                                         ("text-align", "center"),
-                                                         ("font-size", "16px")]},
-                            {"selector": "td", "props": [("text-align", "center"),
-                                                         ("padding", "6px 12px"),
-                                                         ("font-size", "16px")]}
-                        ])
-                        .apply(lambda x: ['background-color: #f9f9f9' if i % 2 else 'background-color: white'
-                                          for i in range(len(x))], axis=0)
-                )
-                html = styled_tabella.hide(axis="index").to_html()
-                st.markdown(html, unsafe_allow_html=True)
+                st.dataframe(tabella_df, use_container_width=True, hide_index=True)
 
                 # --- VISTA TESTUALE ---
                 st.subheader("📝 Sostituzioni in formato testo (mobile/copincolla)")
-
                 testo_output = "Buongiorno, supplenze.©\n\n"
                 for ora, gruppo in tabella_df.groupby("Ora"):
                     if not gruppo.empty:
@@ -647,7 +585,6 @@ elif menu == "Gestione Assenze":
                             testo_output += f"Classe {row['Classe']}\n"
                             testo_output += f"👩‍🏫 Assente: {row['Assente']}\n"
                             testo_output += f"✅ Sostituzione: {sostituto}\n\n"
-
                 st.text_area("Testo pronto da copiare", value=testo_output.strip(), height=300)
 
                 # --- Step 1: conferma ---
