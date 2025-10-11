@@ -379,8 +379,10 @@ with st.spinner('Caricamento orario...'):
 # =========================
 menu = st.sidebar.selectbox(
     "📌 Naviga",
-    ["Inserisci/Modifica Orario", "Gestione Assenze", "Visualizza Orario", "Statistiche"]
+    ["Inserisci/Modifica Orario", "Gestione Assenze", "Visualizza Orario", "Statistiche"],
+    index=1  # apre di default Gestione Assenze
 )
+
 
 
 # --- INSERIMENTO/MODIFICA ORARIO ---
