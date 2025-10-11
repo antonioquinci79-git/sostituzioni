@@ -384,7 +384,6 @@ menu = st.sidebar.selectbox(
 )
 
 
-
 # --- INSERIMENTO/MODIFICA ORARIO ---
 if menu == "Inserisci/Modifica Orario":
     st.header("➕ Inserisci o modifica l'orario")
@@ -755,55 +754,55 @@ elif menu == "Visualizza Orario":
 
 
 
-    # --- STATISTICHE ---
-    elif menu == "Statistiche":
-        st.header("📊 Statistiche Sostituzioni")
-        with st.spinner('Caricamento statistiche...'):
-            df_storico, df_assenze = carica_statistiche()
-        if df_storico.empty:
-            st.info("Nessuna statistica disponibile. Registra prima delle sostituzioni.")
-        else:
-            # Crea il DataFrame aggregato per la tabella e per il grafico
-            df_sum = (
-        df_storico.groupby("docente")["ore"]
-        .sum()
-        .reset_index()
-        .rename(columns={"ore": "Totale Ore Sostituite"})
-        .sort_values(by="Totale Ore Sostituite", ascending=False)
-    )
+# --- STATISTICHE ---
+elif menu == "Statistiche":
+    st.header("📊 Statistiche Sostituzioni")
+    with st.spinner('Caricamento statistiche...'):
+        df_storico, df_assenze = carica_statistiche()
+    if df_storico.empty:
+        st.info("Nessuna statistica disponibile. Registra prima delle sostituzioni.")
+    else:
+        # Crea il DataFrame aggregato per la tabella e per il grafico
+        df_sum = (
+    df_storico.groupby("docente")["ore"]
+    .sum()
+    .reset_index()
+    .rename(columns={"ore": "Totale Ore Sostituite"})
+    .sort_values(by="Totale Ore Sostituite", ascending=False)
+)
 
-    # Migliora la presentazione della tabella
-    st.subheader("📋 Totale ore di sostituzione per docente")
-    styled_df = (
-        df_sum.style
-        .set_table_styles([
-            {"selector": "th", "props": [("background-color", "#f0f0f0"),
-                                         ("font-weight", "bold"),
-                                         ("text-align", "center"),
-                                         ("font-size", "16px"),
-                                         ("padding", "6px 12px")]},
-            {"selector": "td", "props": [("text-align", "center"),
-                                         ("padding", "6px 12px"),
-                                         ("font-size", "15px")]}
-        ])
-        .apply(lambda x: ['background-color: #f9f9f9' if i % 2 else 'background-color: white'
-                          for i in range(len(x))], axis=0)
-    )
+# Migliora la presentazione della tabella
+st.subheader("📋 Totale ore di sostituzione per docente")
+styled_df = (
+    df_sum.style
+    .set_table_styles([
+        {"selector": "th", "props": [("background-color", "#f0f0f0"),
+                                     ("font-weight", "bold"),
+                                     ("text-align", "center"),
+                                     ("font-size", "16px"),
+                                     ("padding", "6px 12px")]},
+        {"selector": "td", "props": [("text-align", "center"),
+                                     ("padding", "6px 12px"),
+                                     ("font-size", "15px")]}
+    ])
+    .apply(lambda x: ['background-color: #f9f9f9' if i % 2 else 'background-color: white'
+                      for i in range(len(x))], axis=0)
+)
 
-    st.dataframe(styled_df, use_container_width=True, hide_index=True)
+st.dataframe(styled_df, use_container_width=True, hide_index=True)
 
-    # Mostra anche un grafico ordinato coerente con la tabella
-    st.subheader("📊 Grafico riepilogativo")
-    st.bar_chart(df_sum.set_index("docente"))
+# Mostra anche un grafico ordinato coerente con la tabella
+st.subheader("📊 Grafico riepilogativo")
+st.bar_chart(df_sum.set_index("docente"))
 
-        st.subheader("⚠️ Azzeramento storico sostituzioni")
-        conferma = st.checkbox("Confermo di voler cancellare definitivamente lo storico delle sostituzioni", key="conf_storico")
-        if st.button("Elimina storico sostituzioni"):
-            if conferma:
-                if clear_sheet_content(STORICO_SHEET):
+    st.subheader("⚠️ Azzeramento storico sostituzioni")
+    conferma = st.checkbox("Confermo di voler cancellare definitivamente lo storico delle sostituzioni", key="conf_storico")
+    if st.button("Elimina storico sostituzioni"):
+        if conferma:
+            if clear_sheet_content(STORICO_SHEET):
                 st.success("Storico delle sostituzioni eliminato ✅")
-            else:
-                st.warning("Devi spuntare la conferma prima di cancellare lo storico delle sostituzioni.")
+        else:
+            st.warning("Devi spuntare la conferma prima di cancellare lo storico delle sostituzioni.")
 
     # STATISTICHE ASSENZE
     st.header("📊 Statistiche Assenze")
