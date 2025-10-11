@@ -109,7 +109,7 @@ def carica_orario():
         if "Escludi" in df.columns:
             # Google Sheets può portare True/False o stringhe
             df["Escludi"] = df["Escludi"].replace({pd.NA: False, "": False}).astype(bool)
-        else:
+else:
             df["Escludi"] = False
         for col in ["Tipo", "Docente", "Giorno", "Ora", "Classe"]:
             df[col] = df[col].astype(str).str.strip().fillna("")
@@ -286,7 +286,7 @@ def download_orario(df):
 def vista_pivot_docenti(df, mode="docenti"):
     # Copiato e adattato da app.py per mantenere la stessa UX
     if df.empty:
-        st.warning("Nessun orario disponibile.")
+st.warning("Nessun orario disponibile.")
         return
 
     if mode == "docenti":
@@ -354,7 +354,7 @@ def vista_pivot_docenti(df, mode="docenti"):
         for i in range(len(pivot)):
             if pivot.loc[i, "Giorno"] == last_giorno and pivot.loc[i, "Giorno"] not in ["", "──"]:
                 pivot.loc[i, "Giorno"] = ""
-            else:
+else:
                 last_giorno = pivot.loc[i, "Giorno"]
 
         styled = pivot.style.set_properties(**{"text-align": "center"})
@@ -394,8 +394,8 @@ if menu == "Inserisci/Modifica Orario":
         if all(col in df_tmp.columns for col in REQUIRED_COLUMNS):
             orario_df = df_tmp[REQUIRED_COLUMNS].copy()
             if salva_orario(orario_df):
-                st.success("Orario caricato con successo ✅")
-        else:
+st.success("Orario caricato con successo ✅")
+else:
             st.error(f"CSV non valido. Deve contenere: {REQUIRED_COLUMNS}")
 
     # Inserimento nuova lezione
@@ -436,11 +436,11 @@ if menu == "Inserisci/Modifica Orario":
                 ].empty
                 if conflitto:
                     st.error("Conflitto: questo docente è già assegnato a un'altra classe in questa ora.")
-                else:
+else:
                     orario_df = pd.concat([orario_df, nuovo], ignore_index=True)
                     if salva_orario(orario_df):
-                        st.success("Lezione aggiunta all'orario e salvata su Google Sheets ✅")
-            else:
+st.success("Lezione aggiunta all'orario e salvata su Google Sheets ✅")
+else:
                 st.error("Compila tutti i campi per aggiungere una lezione.")
 
     # Modifica orario esistente
@@ -454,7 +454,7 @@ if menu == "Inserisci/Modifica Orario":
             # backup: salviamo la versione corrente come foglio temporaneo? Qui semplicemente sovrascriviamo sul foglio
             orario_df = edited_df
             if salva_orario(orario_df):
-                st.success("Orario modificato e salvato su Google Sheets ✅")
+st.success("Orario modificato e salvato su Google Sheets ✅")
     download_orario(orario_df)
 
 # ... (codice precedente) ...
@@ -464,8 +464,8 @@ elif menu == "Gestione Assenze":
     st.header("🚨 Gestione Assenze")
 
     if orario_df.empty:
-        st.warning("Non hai ancora caricato nessun orario.")
-    else:
+st.warning("Non hai ancora caricato nessun orario.")
+else:
         docenti_assenti = st.multiselect("Seleziona docenti assenti", sorted(orario_df["Docente"].unique()))
         data_sostituzione = st.date_input("Data della sostituzione")
 
@@ -479,7 +479,7 @@ elif menu == "Gestione Assenze":
 
         if not docenti_assenti:
             st.info("Seleziona almeno un docente per continuare.")
-        else:
+else:
             # Ore scoperte dell'assente (mostriamo anche se l'assente ha Escludi True)
             ore_assenti = orario_df[
                 (orario_df["Docente"].isin(docenti_assenti)) &
@@ -488,7 +488,7 @@ elif menu == "Gestione Assenze":
 
             if ore_assenti.empty:
                 st.info("I docenti selezionati non hanno lezioni in quel giorno.")
-            else:
+else:
                 st.subheader("📌 Ore scoperte")
                 st.dataframe(ore_assenti[["Docente", "Ora", "Classe", "Tipo"]], use_container_width=True, hide_index=True)
 
@@ -569,7 +569,7 @@ elif menu == "Gestione Assenze":
                         t = tipo_docente(d).lower()
                         if t == "sostegno":
                             np_sost.append(d)
-                        else:
+else:
                             np_curr.append(d)
 
                     # Aggiungo prima NP sostegni, poi NP curricolari
@@ -611,7 +611,7 @@ elif menu == "Gestione Assenze":
                     # pulisco il nome per lo storico (rimuovo prefissi tipo "[S] [NP] " ecc.)
                     if scelta == "Nessuno":
                         nome_pulito = "Nessuno"
-                    else:
+else:
                         nome_pulito = scelta.replace("[S] [NP] ", "").replace("[C] [NP] ", "").replace("[S] ", "").replace("[C] ", "").strip()
 
                     sostituzioni.append({
@@ -716,7 +716,7 @@ elif menu == "Gestione Assenze":
                     st.session_state["data_sostituzione_tmp"] = data_sostituzione
                     st.session_state["giorno_assente_tmp"] = giorno_assente
 
-                    st.success("Tabella confermata ✅ Ora puoi salvarla nello storico.")
+st.success("Tabella confermata ✅ Ora puoi salvarla nello storico.")
 
 
                 # --- Step 2: Salva nello storico ---
@@ -730,7 +730,7 @@ elif menu == "Gestione Assenze":
                         if sost_df is not None and ore_assenti_session is not None:
                             # salva_storico_assenze si aspetta la colonna "Sostituto" con il nome pulito
                             if salva_storico_assenze(data_tmp, giorno_tmp, sost_df, ore_assenti_session):
-                                st.success("Assenze e sostituzioni salvate nello storico ✅")
+st.success("Assenze e sostituzioni salvate nello storico ✅")
                                 for k in ["sostituzioni_confermate", "ore_assenti_confermate",
                                           "data_sostituzione_tmp", "giorno_assente_tmp"]:
                                     st.session_state.pop(k, None)
@@ -747,8 +747,8 @@ elif menu == "Gestione Assenze":
 elif menu == "Visualizza Orario":
     st.header("📅 Orario completo")
     if orario_df.empty:
-        st.warning("Nessun orario disponibile.")
-    else:
+st.warning("Nessun orario disponibile.")
+else:
         vista_pivot_docenti(orario_df, mode="classi")
         download_orario(orario_df)
 
@@ -761,7 +761,7 @@ elif menu == "Statistiche":
         df_storico, df_assenze = carica_statistiche()
     if df_storico.empty:
         st.info("Nessuna statistica disponibile. Registra prima delle sostituzioni.")
-    else:
+else:
         # Crea il DataFrame aggregato per la tabella e per il grafico
         df_sum = (
     df_storico.groupby("docente")["ore"]
@@ -795,20 +795,20 @@ st.dataframe(styled_df, use_container_width=True, hide_index=True)
 st.subheader("📊 Grafico riepilogativo")
 st.bar_chart(df_sum.set_index("docente"))
 
-    st.subheader("⚠️ Azzeramento storico sostituzioni")
-    conferma = st.checkbox("Confermo di voler cancellare definitivamente lo storico delle sostituzioni", key="conf_storico")
-    if st.button("Elimina storico sostituzioni"):
+st.subheader("⚠️ Azzeramento storico sostituzioni")
+conferma = st.checkbox("Confermo di voler cancellare definitivamente lo storico delle sostituzioni", key="conf_storico")
+if st.button("Elimina storico sostituzioni"):
         if conferma:
-            if clear_sheet_content(STORICO_SHEET):
-                st.success("Storico delle sostituzioni eliminato ✅")
-        else:
-            st.warning("Devi spuntare la conferma prima di cancellare lo storico delle sostituzioni.")
+if clear_sheet_content(STORICO_SHEET):
+st.success("Storico delle sostituzioni eliminato ✅")
+else:
+st.warning("Devi spuntare la conferma prima di cancellare lo storico delle sostituzioni.")
 
     # STATISTICHE ASSENZE
     st.header("📊 Statistiche Assenze")
     if df_assenze.empty:
         st.info("Nessuna assenza registrata.")
-    else:
+else:
         st.dataframe(df_assenze, use_container_width=True, hide_index=True)
         df_assenze_agg = df_assenze.groupby("docente")["ora"].count().reset_index().rename(columns={"ora": "Totale Ore Assenti"})
         st.bar_chart(df_assenze_agg.set_index("docente"))
@@ -817,10 +817,10 @@ st.bar_chart(df_sum.set_index("docente"))
     conferma_assenze = st.checkbox("Confermo di voler cancellare definitivamente lo storico delle assenze", key="conf_assenze")
     if st.button("Elimina storico assenze"):
         if conferma_assenze:
-            if clear_sheet_content(ASSENZE_SHEET):
-                st.success("Storico delle assenze eliminato ✅")
-        else:
-            st.warning("Devi spuntare la conferma prima di cancellare lo storico delle assenze.")
+if clear_sheet_content(ASSENZE_SHEET):
+st.success("Storico delle assenze eliminato ✅")
+else:
+st.warning("Devi spuntare la conferma prima di cancellare lo storico delle assenze.")
 
     st.subheader("Cloud Backup")
     st.info("Scarica un backup compresso dei dati dei fogli Orario, Storico e Assenze.")
