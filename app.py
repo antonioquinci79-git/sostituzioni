@@ -384,6 +384,7 @@ menu = st.sidebar.selectbox(
 )
 
 
+
 # --- INSERIMENTO/MODIFICA ORARIO ---
 if menu == "Inserisci/Modifica Orario":
     st.header("➕ Inserisci o modifica l'orario")
@@ -763,37 +764,14 @@ elif menu == "Statistiche":
         st.info("Nessuna statistica disponibile. Registra prima delle sostituzioni.")
     else:
         # Crea il DataFrame aggregato per la tabella e per il grafico
-        df_sum = (
-    df_storico.groupby("docente")["ore"]
-    .sum()
-    .reset_index()
-    .rename(columns={"ore": "Totale Ore Sostituite"})
-    .sort_values(by="Totale Ore Sostituite", ascending=False)
-)
+        df_sum = df_storico.groupby("docente")["ore"].sum().reset_index()
+        df_sum = df_sum.rename(columns={"ore": "Totale Ore Sostituite"})
 
-# Migliora la presentazione della tabella
-st.subheader("📋 Totale ore di sostituzione per docente")
-styled_df = (
-    df_sum.style
-    .set_table_styles([
-        {"selector": "th", "props": [("background-color", "#f0f0f0"),
-                                     ("font-weight", "bold"),
-                                     ("text-align", "center"),
-                                     ("font-size", "16px"),
-                                     ("padding", "6px 12px")]},
-        {"selector": "td", "props": [("text-align", "center"),
-                                     ("padding", "6px 12px"),
-                                     ("font-size", "15px")]}
-    ])
-    .apply(lambda x: ['background-color: #f9f9f9' if i % 2 else 'background-color: white'
-                      for i in range(len(x))], axis=0)
-)
+        # Mostra la tabella con i dati aggregati
+        st.dataframe(df_sum, use_container_width=True, hide_index=True)
 
-st.dataframe(styled_df, use_container_width=True, hide_index=True)
-
-# Mostra anche un grafico ordinato coerente con la tabella
-st.subheader("📊 Grafico riepilogativo")
-st.bar_chart(df_sum.set_index("docente"))
+        # Mostra il grafico a barre
+        st.bar_chart(df_sum.set_index("docente"))
 
     st.subheader("⚠️ Azzeramento storico sostituzioni")
     conferma = st.checkbox("Confermo di voler cancellare definitivamente lo storico delle sostituzioni", key="conf_storico")
