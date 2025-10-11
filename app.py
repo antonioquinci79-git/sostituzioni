@@ -177,6 +177,7 @@ def carica_statistiche():
         st.error(f"Errore nel caricamento delle statistiche da Google Sheets: {e}")
         return pd.DataFrame(columns=["data", "giorno", "docente", "ore"]), pd.DataFrame(columns=["data", "giorno", "docente", "ora", "classe"])
 
+
 def salva_storico_assenze(data_sostituzione, giorno_assente, sostituzioni_df, ore_assenti):
     try:
         client = get_gdrive_client()
@@ -184,19 +185,32 @@ def salva_storico_assenze(data_sostituzione, giorno_assente, sostituzioni_df, or
         ws_storico = sh.worksheet(STORICO_SHEET)
         ws_assenze = sh.worksheet(ASSENZE_SHEET)
 
-        # Prepara dati per append
-        storico_data = []
-        for _, row in sostituzioni_df.iterrows():
-            sost = row.get("Sostituto", "")
-            if sost and sost != "Nessuno":
-                storico_data.append([str(data_sostituzione), giorno_assente, sost, 1])
+        # Filtra solo le sostituzioni effettive (esclude "Nessuno")
+        sostituzioni_effettive = sostituzioni_df[
+            sostituzioni_df["Sostituto"].notna() &
+            (sostituzioni_df["Sostituto"].str.strip() != "") &
+            (sostituzioni_df["Sostituto"].str.strip().str.lower() != "nessuno")
+        ].copy()
+
+        # Prepara i dati per lo storico: ogni sostituzione effettiva vale 1 ora
+        storico_data = [
+            [str(data_sostituzione), giorno_assente, row["Sostituto"], 1]
+            for _, row in sostituzioni_effettive.iterrows()
+        ]
 
         if storico_data:
             ws_storico.append_rows(storico_data, value_input_option="USER_ENTERED")
 
-        assenze_data = []
-        for _, row in ore_assenti.iterrows():
-            assenze_data.append([str(data_sostituzione), giorno_assente, row["Docente"], row["Ora"], row["Classe"]])
+        # Filtra le assenze effettive: includi solo le ore dove il docente è stato effettivamente sostituito
+        ore_effettivamente_assenti = ore_assenti[
+            ore_assenti["Ora"].isin(sostituzioni_effettive["Ora"])
+        ].copy()
+
+        assenze_data = [
+            [str(data_sostituzione), giorno_assente, row["Docente"], row["Ora"], row["Classe"]]
+            for _, row in ore_effettivamente_assenti.iterrows()
+        ]
+
         if assenze_data:
             ws_assenze.append_rows(assenze_data, value_input_option="USER_ENTERED")
 
