@@ -492,28 +492,6 @@ elif menu == "Gestione Assenze":
             else:
                 st.subheader("📌 Ore scoperte")
                 st.dataframe(ore_assenti[["Docente", "Ora", "Classe", "Tipo"]], use_container_width=True, hide_index=True)
-                # --- VISTA RAPIDA ORARIO (NUOVO BLOCCO) ---
-            with st.expander("👀 Vista rapida orario dei docenti assenti"):
-                for d in docenti_assenti:
-                    st.write(f"### 📘 Orario di {d}")
-                    filtro = orario_df[orario_df["Docente"] == d].copy()
-                    filtro = filtro.sort_values(["Giorno", "Ora"])
-                    if filtro.empty:
-                        st.info(f"{d} non ha lezioni registrate nell'orario.")
-                    else:
-                        st.dataframe(filtro, use_container_width=True, hide_index=True)
-
-            with st.expander("👀 Vista rapida orario delle classi coinvolte"):
-                classi_coinvolte = ore_assenti["Classe"].unique()
-                for c in classi_coinvolte:
-                    st.write(f"### 🏫 Classe {c}")
-                    filtro = orario_df[orario_df["Classe"] == c].copy()
-                    filtro = filtro.sort_values(["Giorno", "Ora"])
-                    if filtro.empty:
-                        st.info(f"La classe {c} non compare nell'orario.")
-                    else:
-                        st.dataframe(filtro, use_container_width=True, hide_index=True)
-            # --- FINE VISTA RAPIDA ORARIO ---
 
                 st.subheader("🔄 Possibili sostituti")
                 sostituzioni = []
