@@ -491,7 +491,38 @@ elif menu == "Gestione Assenze":
                 st.info("I docenti selezionati non hanno lezioni in quel giorno.")
             else:
                 st.subheader("📌 Ore scoperte")
-                st.dataframe(ore_assenti[["Docente", "Ora", "Classe", "Tipo"]], use_container_width=True, hide_index=True)
+
+                # --- Aggiunta: calcolo sostegni in servizio per ogni ora scoperta ---
+                ore_assenti_display = ore_assenti.copy()
+                sostegni_presenti = []
+
+                for _, r in ore_assenti.iterrows():
+                    ora = r["Ora"]
+                    classe = r["Classe"]
+
+                    # Cerca docenti di sostegno in quella classe-ora
+                    sost_df = orario_df[
+                        (orario_df["Giorno"] == giorno_assente) &
+                        (orario_df["Ora"] == ora) &
+                        (orario_df["Classe"] == classe) &
+                        (orario_df["Tipo"].str.lower() == "sostegno")
+                    ]
+
+                    if sost_df.empty:
+                        sostegni_presenti.append("—")
+                    else:
+                        # Elenco nomi separati da virgola
+                        lista = ", ".join(sorted(sost_df["Docente"].unique()))
+                        sostegni_presenti.append(lista)
+
+                # Colonna aggiuntiva
+                ore_assenti_display["Sostegni in servizio"] = sostegni_presenti
+
+                # Ordina in modo naturale
+                ore_assenti_display = ore_assenti_display[["Docente", "Ora", "Classe", "Tipo", "Sostegni in servizio"]]
+
+                st.dataframe(ore_assenti_display, use_container_width=True, hide_index=True)
+
 
                 st.subheader("🔄 Possibili sostituti")
                 sostituzioni = []
