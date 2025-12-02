@@ -377,10 +377,10 @@ with st.spinner('Caricamento orario...'):
 # =========================
 # MENU PRINCIPALE (mobile-friendly)
 # =========================
-menu = st.sidebar.selectbox(
-    "📌 Naviga",
-    ["Inserisci/Modifica Orario", "Gestione Assenze", "Visualizza Orario", "Statistiche"],
-    index=1  # apre di default Gestione Assenze
+menu = st.segmented_control(
+"Navigazione",
+["Inserisci/Modifica Orario", "Gestione Assenze", "Visualizza Orario", "Statistiche"],
+selection_mode="single"
 )
 
 
