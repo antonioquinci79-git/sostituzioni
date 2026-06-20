@@ -961,7 +961,18 @@ elif menu == "Visualizza Orario":
     if orario_df.empty:
         st.warning("Nessun orario disponibile.")
     else:
-        vista_pivot_docenti(orario_df, mode="classi")
+        ricerca = st.text_input("🔍 Cerca docente", placeholder="Scrivi il nome...").strip().lower()
+        if ricerca:
+            df_filtrato = orario_df[orario_df["Docente"].str.lower().str.contains(ricerca, na=False)]
+            if df_filtrato.empty:
+                st.warning("Nessun docente trovato.")
+            else:
+                docenti_trovati = df_filtrato["Docente"].unique()
+                if len(docenti_trovati) > 1:
+                    st.caption(f"Docenti trovati: {', '.join(docenti_trovati)}")
+                vista_pivot_docenti(df_filtrato, mode="classi")
+        else:
+            vista_pivot_docenti(orario_df, mode="classi")
         download_orario(orario_df)
 
 
