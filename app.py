@@ -37,6 +37,15 @@ st.markdown("""
     padding-left: 1rem;
     padding-right: 1rem;
 }
+
+/* Pills: dimensione tocco comoda su mobile */
+[data-testid="stPills"] button {
+    font-size: 1em !important;
+    padding: 0.5em 0.9em !important;
+    border-radius: 20px !important;
+    margin: 3px !important;
+    min-height: 2.4em !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -545,7 +554,12 @@ elif menu == "Gestione Assenze":
     if orario_df.empty:
         st.warning("Non hai ancora caricato nessun orario.")
     else:
-        docenti_assenti = st.multiselect("Seleziona docenti assenti", sorted(orario_df["Docente"].unique()))
+        docenti_assenti = st.pills(
+            "Seleziona docenti assenti",
+            sorted(orario_df["Docente"].unique()),
+            selection_mode="multi",
+            key="pills_docenti_assenti"
+        )
         data_sostituzione = st.date_input("Data della sostituzione")
 
         # Giorno calcolato automaticamente dalla data (in italiano)
@@ -570,9 +584,10 @@ elif menu == "Gestione Assenze":
                 "selezionabili come sostituti, senza generare un conflitto alla conferma."
             )
             classi_disponibili = sorted(orario_df["Classe"].unique()) if not orario_df.empty else []
-            classi_uscita_selezionate = st.multiselect(
+            classi_uscita_selezionate = st.pills(
                 "Classi in uscita",
                 classi_disponibili,
+                selection_mode="multi",
                 key="classi_uscita_multiselect"
             )
             for classe_u in classi_uscita_selezionate:
@@ -584,10 +599,11 @@ elif menu == "Gestione Assenze":
                 if not ore_classe_u:
                     st.caption(f"⚠️ {classe_u} non ha lezioni previste {giorno_assente}.")
                     continue
-                ore_scelte_u = st.multiselect(
+                ore_scelte_u = st.pills(
                     f"Ore in uscita per {classe_u} (default: tutta la giornata)",
                     ore_classe_u,
                     default=ore_classe_u,
+                    selection_mode="multi",
                     key=f"ore_uscita_{classe_u}"
                 )
                 for ora_u in ore_scelte_u:
@@ -781,12 +797,16 @@ elif menu == "Gestione Assenze":
 
                     default_index = options.index(proposto_display) if proposto_display in options else 0
 
-                    scelta = st.selectbox(
-                        f"Sostituto per {ora} ora - Classe {classe} (assente {assente})",
+                    scelta = st.pills(
+                        f"Sostituto per {ora} ora – Classe {classe} (assente: {assente})",
                         options,
-                        index=default_index,
+                        default=options[default_index],
+                        selection_mode="single",
                         key=f"sost_{assente}_{ora}_{classe}"
                     )
+                    # pills può restituire None se l'utente deseleziona tutto
+                    if scelta is None:
+                        scelta = "Nessuno"
 
                     # pulisco il nome per lo storico (rimuovo prefissi tipo "[S] [NP] " ecc.)
                     if scelta == "Nessuno":
