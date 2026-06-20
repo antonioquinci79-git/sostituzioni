@@ -46,6 +46,72 @@ st.markdown("""
     margin: 3px !important;
     min-height: 2.4em !important;
 }
+
+/* ── Colori per categoria sostituto ── */
+
+/* [S] Sostegno → verde */
+[data-testid="stPills"] button[aria-label^="[S] [NP]"],
+[data-testid="stPills"] button[aria-label^="[S] "] {
+    background-color: #d4edda !important;
+    border-color: #28a745 !important;
+    color: #155724 !important;
+}
+[data-testid="stPills"] button[aria-label^="[S] [NP]"][aria-pressed="true"],
+[data-testid="stPills"] button[aria-label^="[S] "][aria-pressed="true"] {
+    background-color: #28a745 !important;
+    color: #fff !important;
+}
+
+/* [S] [NP] → verde più tenue (non presente in orario) */
+[data-testid="stPills"] button[aria-label^="[S] [NP]"] {
+    background-color: #eaf6ec !important;
+    border-color: #82c991 !important;
+    color: #2d6a3f !important;
+    opacity: 0.85;
+}
+[data-testid="stPills"] button[aria-label^="[S] [NP]"][aria-pressed="true"] {
+    background-color: #5cb87a !important;
+    color: #fff !important;
+    opacity: 1;
+}
+
+/* [C] Curricolare → blu */
+[data-testid="stPills"] button[aria-label^="[C] [NP]"],
+[data-testid="stPills"] button[aria-label^="[C] "] {
+    background-color: #cce5ff !important;
+    border-color: #004085 !important;
+    color: #004085 !important;
+}
+[data-testid="stPills"] button[aria-label^="[C] [NP]"][aria-pressed="true"],
+[data-testid="stPills"] button[aria-label^="[C] "][aria-pressed="true"] {
+    background-color: #0069d9 !important;
+    color: #fff !important;
+}
+
+/* [C] [NP] → blu più tenue */
+[data-testid="stPills"] button[aria-label^="[C] [NP]"] {
+    background-color: #e8f2ff !important;
+    border-color: #6ca0d4 !important;
+    color: #1a4a7a !important;
+    opacity: 0.85;
+}
+[data-testid="stPills"] button[aria-label^="[C] [NP]"][aria-pressed="true"] {
+    background-color: #4a90d9 !important;
+    color: #fff !important;
+    opacity: 1;
+}
+
+/* [C] [USCITA] → arancione */
+[data-testid="stPills"] button[aria-label^="[C] [USCITA]"] {
+    background-color: #fff3cd !important;
+    border-color: #e0a800 !important;
+    color: #856404 !important;
+    opacity: 1 !important;
+}
+[data-testid="stPills"] button[aria-label^="[C] [USCITA]"][aria-pressed="true"] {
+    background-color: #ffc107 !important;
+    color: #212529 !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -656,6 +722,15 @@ elif menu == "Gestione Assenze":
 
 
                 st.subheader("🔄 Possibili sostituti")
+                st.markdown("""
+<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;font-size:0.85em;">
+  <span style="background:#d4edda;border:1px solid #28a745;color:#155724;padding:3px 10px;border-radius:12px;">🟢 [S] Sostegno presente</span>
+  <span style="background:#eaf6ec;border:1px solid #82c991;color:#2d6a3f;padding:3px 10px;border-radius:12px;">🟩 [S][NP] Sostegno non in orario</span>
+  <span style="background:#cce5ff;border:1px solid #004085;color:#004085;padding:3px 10px;border-radius:12px;">🔵 [C] Curricolare presente</span>
+  <span style="background:#e8f2ff;border:1px solid #6ca0d4;color:#1a4a7a;padding:3px 10px;border-radius:12px;">🔹 [C][NP] Curricolare non in orario</span>
+  <span style="background:#fff3cd;border:1px solid #e0a800;color:#856404;padding:3px 10px;border-radius:12px;">🟡 [C][USCITA] Libero per uscita</span>
+</div>
+""", unsafe_allow_html=True)
                 sostituzioni = []
 
                 # Precalcolo: tutti i docenti (escludiamo definitivamente chi ha Escludi=True)
