@@ -1023,14 +1023,34 @@ elif menu == "Statistiche":
     if df_assenze.empty:
         st.info("Nessuna assenza registrata.")
     else:
-        df_assenze_agg = df_assenze.groupby("docente")["ora"].count().reset_index().rename(columns={"ora": "Totale Ore Assenti"})
+        # Ore totali per docente
+        df_ore = df_assenze.groupby("docente")["ora"].count().reset_index().rename(columns={"ora": "Totale Ore Assenti"})
+        # Giorni effettivi: date distinte per docente
+        df_giorni = df_assenze.groupby("docente")["data"].nunique().reset_index().rename(columns={"data": "Giorni Assenti"})
+        df_assenze_agg = df_ore.merge(df_giorni, on="docente")
         df_assenze_agg = df_assenze_agg.sort_values("Totale Ore Assenti", ascending=False).reset_index(drop=True)
 
-        top3_assenze = [(r["docente"], int(r["Totale Ore Assenti"])) for _, r in df_assenze_agg.head(3).iterrows()]
-        render_cards("🟠 Più assenze", top3_assenze, "#e65100")
+        # Card assenze con ore + giorni
+        medaglie = ["🥇", "🥈", "🥉"]
+        items_html = ""
+        for i, (_, r) in enumerate(df_assenze_agg.head(3).iterrows()):
+            medaglia = medaglie[i] if i < 3 else ""
+            items_html += f"""
+  <div style="display:flex;justify-content:space-between;align-items:center;
+              padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.25);">
+    <span style="font-size:1.05em;">{medaglia} {r['docente'].title()}</span>
+    <span style="font-size:0.95em;font-weight:bold;white-space:nowrap;margin-left:12px;">
+      {int(r['Totale Ore Assenti'])} ore &nbsp;·&nbsp; {int(r['Giorni Assenti'])} giorni
+    </span>
+  </div>"""
+        st.markdown(f"""
+<div style="background:#e65100;border-radius:14px;padding:16px 20px;color:white;margin-bottom:16px;">
+  <div style="font-size:0.85em;font-weight:600;opacity:0.85;margin-bottom:6px;">🟠 Più assenze</div>
+  {items_html}
+</div>""", unsafe_allow_html=True)
 
         st.dataframe(df_assenze_agg, use_container_width=True, hide_index=True)
-        st.bar_chart(df_assenze_agg.set_index("docente"))
+        st.bar_chart(df_assenze_agg.set_index("docente")[["Totale Ore Assenti"]])
 
     st.subheader("⚠️ Azzeramento storico assenze")
     conferma_assenze = st.checkbox("Confermo di voler cancellare definitivamente lo storico delle assenze", key="conf_assenze")
