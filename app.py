@@ -2,9 +2,11 @@ import streamlit as st
 import pandas as pd
 import os
 import re
+import io
+import zipfile
 import gspread
 import gspread_dataframe as gd
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2.service_account import Credentials
 from datetime import datetime
 
 # =========================
@@ -46,56 +48,75 @@ SPREADSHEET_NAME = "OrarioSostituzioni"
 ORARIO_SHEET = "orario"
 STORICO_SHEET = "storico"
 ASSENZE_SHEET = "assenze"
+GIORNI_SETTIMANA = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì"]
+ORE_LEZIONE = ["I", "II", "III", "IV", "V", "VI"]
+TIPI_LEZIONE = ["Lezione", "Sostegno", "Altro"]
 
 # =========================
 # CLIENT GOOGLE DRIVE
 # =========================
-@st.cache_resource
+SCOPE = [
+    'https://spreadsheets.google.com/feeds',
+    'https://www.googleapis.com/auth/drive',
+    'https://www.googleapis.com/auth/spreadsheets'
+]
+
+@st.cache_resource(show_spinner=False)
 def get_gdrive_client():
     gdrive_credentials = st.secrets["gdrive"]
-    scope = [
-        'https://spreadsheets.google.com/feeds',
-        'https://www.googleapis.com/auth/drive',
-        'https://www.googleapis.com/auth/spreadsheets'
-    ]
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(gdrive_credentials, scope)
+    creds = Credentials.from_service_account_info(gdrive_credentials, scopes=SCOPE)
     client = gspread.authorize(creds)
     return client
+
+@st.cache_resource(show_spinner=False)
+def get_spreadsheet():
+    """Apre (o crea) lo spreadsheet UNA SOLA VOLTA per la vita dell'app
+    (cache_resource), invece di rifare la ricerca per nome ad ogni rerun."""
+    client = get_gdrive_client()
+    try:
+        return client.open(SPREADSHEET_NAME)
+    except gspread.SpreadsheetNotFound:
+        # Creazione: l'utente dovrà eventualmente condividere il foglio
+        # con l'email del service account se vuole accedervi anche da browser.
+        return client.create(SPREADSHEET_NAME)
+
+@st.cache_resource(show_spinner=False)
+def get_worksheet(sheet_name: str):
+    """Restituisce l'handle del worksheet, creandolo con l'header corretto
+    se non esiste. Cachato: una volta risolto l'handle, i rerun successivi
+    non fanno più alcuna chiamata 'metadata' a Google, solo letture/scritture
+    sui valori quando effettivamente richieste."""
+    headers_by_sheet = {
+        ORARIO_SHEET: REQUIRED_COLUMNS,
+        STORICO_SHEET: ["data", "giorno", "docente", "ore"],
+        ASSENZE_SHEET: ["data", "giorno", "docente", "ora", "classe"],
+    }
+    sh = get_spreadsheet()
+    try:
+        return sh.worksheet(sheet_name)
+    except gspread.WorksheetNotFound:
+        ws = sh.add_worksheet(title=sheet_name, rows="200", cols="20")
+        header_df = pd.DataFrame(columns=headers_by_sheet.get(sheet_name, []))
+        gd.set_with_dataframe(ws, header_df, include_index=False, include_column_header=True)
+        return ws
 
 # =========================
 # INIZIALIZZAZIONE FOGLI (se mancanti creali con header corretti)
 # =========================
 def ensure_sheets_exist():
-    client = get_gdrive_client()
-    try:
-        sh = client.open(SPREADSHEET_NAME)
-    except Exception as e:
-        # Proviamo a crearne uno nuovo se non esiste
-        sh = client.create(SPREADSHEET_NAME)
-        # la creazione potrebbe non impostare permessi: l'utente deve condividere il foglio con il service account se necessario
-    # Verifica e crea fogli con intestazioni se mancanti
-    existing = {ws.title for ws in sh.worksheets()}
-    if ORARIO_SHEET not in existing:
-        ws = sh.add_worksheet(title=ORARIO_SHEET, rows="100", cols="20")
-        header_df = pd.DataFrame(columns=REQUIRED_COLUMNS)
-        gd.set_with_dataframe(ws, header_df, include_index=False, include_column_header=True)
-    if STORICO_SHEET not in existing:
-        ws = sh.add_worksheet(title=STORICO_SHEET, rows="100", cols="10")
-        header = pd.DataFrame(columns=["data", "giorno", "docente", "ore"])
-        gd.set_with_dataframe(ws, header, include_index=False, include_column_header=True)
-    if ASSENZE_SHEET not in existing:
-        ws = sh.add_worksheet(title=ASSENZE_SHEET, rows="100", cols="10")
-        header = pd.DataFrame(columns=["data", "giorno", "docente", "ora", "classe"])
-        gd.set_with_dataframe(ws, header, include_index=False, include_column_header=True)
+    """Pre-carica gli handle dei worksheet. Grazie al cache_resource su
+    get_worksheet, dal secondo rerun in poi questa funzione non genera
+    alcuna chiamata di rete."""
+    for nome_foglio in (ORARIO_SHEET, STORICO_SHEET, ASSENZE_SHEET):
+        get_worksheet(nome_foglio)
 
 # =========================
 # CARICAMENTO / SALVATAGGIO ORARIO
 # =========================
+@st.cache_data(ttl=300, show_spinner=False)
 def carica_orario():
     try:
-        client = get_gdrive_client()
-        sh = client.open(SPREADSHEET_NAME)
-        ws = sh.worksheet(ORARIO_SHEET)
+        ws = get_worksheet(ORARIO_SHEET)
         df = gd.get_as_dataframe(ws, evaluate_formulas=True, header=0)
         # rimuovo colonne totalmente vuote
         df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
@@ -122,9 +143,7 @@ def carica_orario():
 
 def salva_orario(df):
     try:
-        client = get_gdrive_client()
-        sh = client.open(SPREADSHEET_NAME)
-        ws = sh.worksheet(ORARIO_SHEET)
+        ws = get_worksheet(ORARIO_SHEET)
         # assicurati che le colonne siano quelle giuste e in ordine
         df_to_save = df.copy()
         for col in REQUIRED_COLUMNS:
@@ -132,6 +151,7 @@ def salva_orario(df):
                 df_to_save[col] = ""
         df_to_save = df_to_save[REQUIRED_COLUMNS]
         gd.set_with_dataframe(ws, df_to_save, include_index=False, include_column_header=True)
+        carica_orario.clear()  # invalida la cache: i dati appena salvati saranno subito visibili
         return True
     except Exception as e:
         st.error(f"Errore nel salvataggio dell'orario su Google Sheets: {e}")
@@ -140,12 +160,11 @@ def salva_orario(df):
 # =========================
 # CARICAMENTO / SALVATAGGIO STATISTICHE (storico + assenze)
 # =========================
+@st.cache_data(ttl=300, show_spinner=False)
 def carica_statistiche():
     try:
-        client = get_gdrive_client()
-        sh = client.open(SPREADSHEET_NAME)
-        ws_storico = sh.worksheet(STORICO_SHEET)
-        ws_assenze = sh.worksheet(ASSENZE_SHEET)
+        ws_storico = get_worksheet(STORICO_SHEET)
+        ws_assenze = get_worksheet(ASSENZE_SHEET)
         df_storico = gd.get_as_dataframe(ws_storico, header=0).dropna(how='all')
         df_assenze = gd.get_as_dataframe(ws_assenze, header=0).dropna(how='all')
         # Normalizza nomi e tipi
@@ -180,10 +199,8 @@ def carica_statistiche():
 
 def salva_storico_assenze(data_sostituzione, giorno_assente, sostituzioni_df, ore_assenti):
     try:
-        client = get_gdrive_client()
-        sh = client.open(SPREADSHEET_NAME)
-        ws_storico = sh.worksheet(STORICO_SHEET)
-        ws_assenze = sh.worksheet(ASSENZE_SHEET)
+        ws_storico = get_worksheet(STORICO_SHEET)
+        ws_assenze = get_worksheet(ASSENZE_SHEET)
 
         # Filtra solo le sostituzioni effettive (esclude "Nessuno")
         sostituzioni_effettive = sostituzioni_df[
@@ -214,6 +231,7 @@ def salva_storico_assenze(data_sostituzione, giorno_assente, sostituzioni_df, or
         if assenze_data:
             ws_assenze.append_rows(assenze_data, value_input_option="USER_ENTERED")
 
+        carica_statistiche.clear()  # invalida la cache: storico/assenze aggiornati saranno subito visibili
         return True
     except Exception as e:
         st.error(f"Errore nel salvataggio dei dati su Google Sheets: {e}")
@@ -221,14 +239,16 @@ def salva_storico_assenze(data_sostituzione, giorno_assente, sostituzioni_df, or
 
 def clear_sheet_content(sheet_name):
     try:
-        client = get_gdrive_client()
-        sh = client.open(SPREADSHEET_NAME)
-        ws = sh.worksheet(sheet_name)
+        ws = get_worksheet(sheet_name)
         ws.clear()
         if sheet_name == STORICO_SHEET:
             ws.append_row(["data", "giorno", "docente", "ore"])
         elif sheet_name == ASSENZE_SHEET:
             ws.append_row(["data", "giorno", "docente", "ora", "classe"])
+        if sheet_name in (STORICO_SHEET, ASSENZE_SHEET):
+            carica_statistiche.clear()
+        elif sheet_name == ORARIO_SHEET:
+            carica_orario.clear()
         return True
     except Exception as e:
         st.error(f"Errore nell'azzeramento del foglio {sheet_name}: {e}")
@@ -239,31 +259,26 @@ def clear_sheet_content(sheet_name):
 # =========================
 def create_backup():
     try:
-        client = get_gdrive_client()
-        sh = client.open(SPREADSHEET_NAME)
-
         # Esporta il foglio "orario" in CSV
-        ws_orario = sh.worksheet(ORARIO_SHEET)
+        ws_orario = get_worksheet(ORARIO_SHEET)
         df_orario = gd.get_as_dataframe(ws_orario, evaluate_formulas=True, header=0).dropna(how='all')
-        
+
         # Esporta il foglio "storico" in CSV
-        ws_storico = sh.worksheet(STORICO_SHEET)
+        ws_storico = get_worksheet(STORICO_SHEET)
         df_storico = gd.get_as_dataframe(ws_storico, evaluate_formulas=True, header=0).dropna(how='all')
 
         # Esporta il foglio "assenze" in CSV
-        ws_assenze = sh.worksheet(ASSENZE_SHEET)
+        ws_assenze = get_worksheet(ASSENZE_SHEET)
         df_assenze = gd.get_as_dataframe(ws_assenze, evaluate_formulas=True, header=0).dropna(how='all')
 
         # Comprimi i DataFrame in un file ZIP in memoria
-        import io
-        import zipfile
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
             # Aggiungi i file CSV al buffer
             zip_file.writestr("orario.csv", df_orario.to_csv(index=False).encode('utf-8'))
             zip_file.writestr("storico.csv", df_storico.to_csv(index=False).encode('utf-8'))
             zip_file.writestr("assenze.csv", df_assenze.to_csv(index=False).encode('utf-8'))
-        
+
         # Restituisci il contenuto del file ZIP
         zip_buffer.seek(0)
         return zip_buffer
@@ -274,6 +289,24 @@ def create_backup():
 # =========================
 # UTILITA' PER DOWNLOAD e PIVOT
 # =========================
+def build_docente_tipo_map(df):
+    """Precalcola una mappa {docente: tipo} una sola volta, invece di
+    rifare un filtro su orario_df per ogni docente dentro i loop."""
+    if df.empty:
+        return {}
+    tmp = df[df["Tipo"].astype(str).str.strip() != ""]
+    if tmp.empty:
+        return {}
+    return tmp.groupby("Docente")["Tipo"].first().to_dict()
+
+def trova_conflitti_orario(df):
+    """Ritorna le combinazioni (Docente, Giorno, Ora) che compaiono più di
+    una volta in df, cioè un docente assegnato a due classi nella stessa ora."""
+    if df.empty:
+        return []
+    conteggi = df.groupby(["Docente", "Giorno", "Ora"]).size()
+    return [idx for idx, n in conteggi.items() if n > 1 and idx[0].strip() != ""]
+
 def download_orario(df):
     if not df.empty:
         st.download_button(
@@ -332,8 +365,8 @@ def vista_pivot_docenti(df, mode="docenti"):
             return (10**9, str(classe))
         pivot = pivot.reindex(sorted(pivot.columns, key=sort_classi), axis=1)
 
-        ordine_giorni = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì"]
-        ordine_ore = ["I", "II", "III", "IV", "V", "VI"]
+        ordine_giorni = GIORNI_SETTIMANA
+        ordine_ore = ORE_LEZIONE
         pivot = pivot.reindex(pd.MultiIndex.from_product([ordine_giorni, ordine_ore], names=["Giorno", "Ora"]))
 
         pivot = pivot.reset_index()
@@ -392,12 +425,31 @@ if menu == "Inserisci/Modifica Orario":
     uploaded_file = st.file_uploader("Carica un nuovo orario (CSV)", type="csv")
     if uploaded_file:
         df_tmp = pd.read_csv(uploaded_file)
-        if all(col in df_tmp.columns for col in REQUIRED_COLUMNS):
-            orario_df = df_tmp[REQUIRED_COLUMNS].copy()
-            if salva_orario(orario_df):
-                st.success("Orario caricato con successo ✅")
-        else:
+        if not all(col in df_tmp.columns for col in REQUIRED_COLUMNS):
             st.error(f"CSV non valido. Deve contenere: {REQUIRED_COLUMNS}")
+        else:
+            df_nuovo = df_tmp[REQUIRED_COLUMNS].copy()
+            for col in ["Docente", "Giorno", "Ora", "Classe", "Tipo"]:
+                df_nuovo[col] = df_nuovo[col].astype(str).str.strip()
+            valori_non_validi = df_nuovo[
+                ~df_nuovo["Giorno"].isin(GIORNI_SETTIMANA) | ~df_nuovo["Ora"].isin(ORE_LEZIONE)
+            ]
+            conflitti_csv = trova_conflitti_orario(df_nuovo)
+            if not valori_non_validi.empty:
+                st.error(
+                    f"Il CSV contiene valori di Giorno/Ora non validi (attesi {GIORNI_SETTIMANA} e {ORE_LEZIONE}). "
+                    "Correggi il file e ricaricalo."
+                )
+                st.dataframe(valori_non_validi, use_container_width=True, hide_index=True)
+            elif conflitti_csv:
+                st.error("Il CSV contiene docenti assegnati a più classi nella stessa ora:")
+                for docente, giorno, ora in conflitti_csv:
+                    st.write(f"- {docente}: {giorno} ora {ora}")
+            else:
+                orario_df = df_nuovo
+                if salva_orario(orario_df):
+                    st.success("Orario caricato con successo ✅")
+                    st.rerun()
 
     # Inserimento nuova lezione
     with st.expander("Aggiungi una nuova lezione"):
@@ -408,8 +460,8 @@ if menu == "Inserisci/Modifica Orario":
         )
         if docente == "➕ Nuovo docente":
             docente = st.text_input("Inserisci nuovo docente")
-        giorno = st.selectbox("Giorno", ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì"])
-        ora = st.selectbox("Ora", ["I", "II", "III", "IV", "V", "VI"])
+        giorno = st.selectbox("Giorno", GIORNI_SETTIMANA)
+        ora = st.selectbox("Ora", ORE_LEZIONE)
         classe = st.selectbox(
             "Classe",
             ["➕ Nuova classe"] + (sorted(orario_df["Classe"].unique()) if not orario_df.empty else []),
@@ -417,7 +469,7 @@ if menu == "Inserisci/Modifica Orario":
         )
         if classe == "➕ Nuova classe":
             classe = st.text_input("Inserisci nuova classe")
-        tipo = st.selectbox("Tipo", ["Lezione", "Sostegno", "Altro"])
+        tipo = st.selectbox("Tipo", TIPI_LEZIONE)
         escludi = st.checkbox("Escludi da sostituzioni")
         if st.button("Aggiungi", key="add_lesson"):
             if docente and giorno and ora and classe and tipo:
@@ -441,6 +493,7 @@ if menu == "Inserisci/Modifica Orario":
                     orario_df = pd.concat([orario_df, nuovo], ignore_index=True)
                     if salva_orario(orario_df):
                         st.success("Lezione aggiunta all'orario e salvata su Google Sheets ✅")
+                        st.rerun()
             else:
                 st.error("Compila tutti i campi per aggiungere una lezione.")
 
@@ -450,12 +503,37 @@ if menu == "Inserisci/Modifica Orario":
         col_order = REQUIRED_COLUMNS
         df_edit = orario_df[col_order].copy()
         df_edit = df_edit.sort_values(by=["Docente"])
-        edited_df = st.data_editor(df_edit, use_container_width=True, hide_index=True)
+        edited_df = st.data_editor(
+            df_edit,
+            use_container_width=True,
+            hide_index=True,
+            num_rows="dynamic",
+            column_config={
+                "Giorno": st.column_config.SelectboxColumn("Giorno", options=GIORNI_SETTIMANA, required=True),
+                "Ora": st.column_config.SelectboxColumn("Ora", options=ORE_LEZIONE, required=True),
+                "Tipo": st.column_config.SelectboxColumn("Tipo", options=TIPI_LEZIONE, required=True),
+                "Escludi": st.column_config.CheckboxColumn("Escludi"),
+                "Docente": st.column_config.TextColumn("Docente", required=True),
+                "Classe": st.column_config.TextColumn("Classe", required=True),
+            }
+        )
         if st.button("Salva modifiche"):
-            # backup: salviamo la versione corrente come foglio temporaneo? Qui semplicemente sovrascriviamo sul foglio
-            orario_df = edited_df
-            if salva_orario(orario_df):
-                st.success("Orario modificato e salvato su Google Sheets ✅")
+            df_da_salvare = edited_df.copy()
+            for col in ["Docente", "Giorno", "Ora", "Classe", "Tipo"]:
+                df_da_salvare[col] = df_da_salvare[col].astype(str).str.strip()
+            # scarta righe vuote (es. nuove righe aggiunte e non compilate)
+            df_da_salvare = df_da_salvare[df_da_salvare["Docente"] != ""].copy()
+
+            conflitti_edit = trova_conflitti_orario(df_da_salvare)
+            if conflitti_edit:
+                st.error("Impossibile salvare: lo stesso docente è assegnato a più classi nella stessa ora:")
+                for docente, giorno, ora in conflitti_edit:
+                    st.write(f"- {docente}: {giorno} ora {ora}")
+            else:
+                orario_df = df_da_salvare
+                if salva_orario(orario_df):
+                    st.success("Orario modificato e salvato su Google Sheets ✅")
+                    st.rerun()
     download_orario(orario_df)
 
 # ... (codice precedente) ...
@@ -477,6 +555,9 @@ elif menu == "Gestione Assenze":
             "Thursday": "Giovedì", "Friday": "Venerdì", "Saturday": "Sabato", "Sunday": "Domenica"
         }
         giorno_assente = traduzione_giorni.get(giorno_assente, giorno_assente)
+
+        if giorno_assente not in GIORNI_SETTIMANA:
+            st.warning(f"Hai selezionato {giorno_assente}, un giorno non presente nell'orario scolastico (Lun-Ven).")
 
         if not docenti_assenti:
             st.info("Seleziona almeno un docente per continuare.")
@@ -531,12 +612,11 @@ elif menu == "Gestione Assenze":
                 tutti_docenti = sorted(orario_df["Docente"].unique())
                 escludi_docenti = set(orario_df[orario_df["Escludi"]]["Docente"].unique())
 
-                # Funzione helper per ottenere il "Tipo" di un docente (prima occorrenza)
+                # Mappa docente -> tipo, calcolata UNA volta sola (prima costava un filtro
+                # su tutto orario_df per ogni singolo docente, ad ogni ora scoperta)
+                docente_tipo_map = build_docente_tipo_map(orario_df)
                 def tipo_docente(d):
-                    vals = orario_df.loc[orario_df["Docente"] == d, "Tipo"].astype(str).str.strip()
-                    if not vals.dropna().empty:
-                        return vals.dropna().iloc[0]
-                    return ""
+                    return docente_tipo_map.get(d, "")
 
                 # Per ogni ora scoperta costruisco la lista di opzioni con l'ordine richiesto
                 for _, row in ore_assenti.iterrows():
@@ -657,7 +737,7 @@ elif menu == "Gestione Assenze":
                 sostituzioni_df = pd.DataFrame(sostituzioni)
 
                 # Ordina per ora
-                ordine_ore = ["I", "II", "III", "IV", "V", "VI"]
+                ordine_ore = ORE_LEZIONE
                 if not sostituzioni_df.empty:
                     sostituzioni_df["Ora"] = pd.Categorical(sostituzioni_df["Ora"], categories=ordine_ore, ordered=True)
                     sostituzioni_df = sostituzioni_df.sort_values("Ora").reset_index(drop=True)
@@ -690,7 +770,7 @@ elif menu == "Gestione Assenze":
 
                 # --- VISTA TESTUALE ---
                 st.subheader("📝 Sostituzioni in formato testo (mobile/copincolla)")
-                testo_output = "Buongiorno, supplenze.©\n\n"
+                testo_output = "Buongiorno, supplenze:\n\n"
 
                 # uso sostituzioni_df che ha sia display che nome pulito
                 for ora, gruppo in sostituzioni_df.groupby("Ora"):
@@ -721,8 +801,8 @@ elif menu == "Gestione Assenze":
 
                         # 2) Conflitto: docente scelto ma già in orario in quell’ora (SOLO curricolari)
                         for s in sostituti:
-                            # recupero il tipo del docente
-                            tipo = orario_df.loc[orario_df["Docente"] == s, "Tipo"].astype(str).str.lower().iloc[0] if not orario_df.loc[orario_df["Docente"] == s].empty else ""
+                            # recupero il tipo del docente dalla mappa precalcolata
+                            tipo = docente_tipo_map.get(s, "").lower()
                             if tipo != "sostegno":
                                 if not orario_df[
                                     (orario_df["Docente"] == s) &
