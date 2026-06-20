@@ -263,6 +263,44 @@ def clear_sheet_content(sheet_name):
         st.error(f"Errore nell'azzeramento del foglio {sheet_name}: {e}")
         return False
 
+def archivia_anno_scolastico(anno: str):
+    """Copia storico e assenze in fogli archivio_storico_ANNO e archivio_assenze_ANNO,
+    poi svuota i fogli attivi pronti per il nuovo anno."""
+    try:
+        sh = get_spreadsheet()
+        suffisso = anno.replace("/", "-")
+        nomi_archivio = {
+            STORICO_SHEET: f"archivio_storico_{suffisso}",
+            ASSENZE_SHEET: f"archivio_assenze_{suffisso}",
+        }
+
+        for sheet_src, nome_dest in nomi_archivio.items():
+            # Controlla che il foglio archivio non esista già
+            try:
+                sh.worksheet(nome_dest)
+                st.error(f"Esiste già un archivio per l'anno {anno} ({nome_dest}). Scegli un anno diverso.")
+                return False
+            except gspread.WorksheetNotFound:
+                pass
+
+            # Leggi dati attivi
+            ws_src = get_worksheet(sheet_src)
+            dati = ws_src.get_all_values()  # lista di liste inclusa intestazione
+
+            # Crea foglio archivio e scrivi dati
+            ws_dest = sh.add_worksheet(title=nome_dest, rows=max(len(dati) + 10, 50), cols=10)
+            if dati:
+                ws_dest.update(dati, value_input_option="USER_ENTERED")
+
+        # Svuota i fogli attivi
+        clear_sheet_content(STORICO_SHEET)
+        clear_sheet_content(ASSENZE_SHEET)
+        carica_statistiche.clear()
+        return True
+    except Exception as e:
+        st.error(f"Errore durante l'archiviazione: {e}")
+        return False
+
 # =========================
 # FUNZIONE PER IL BACKUP CORRETTA
 # =========================
@@ -1106,3 +1144,34 @@ elif menu == "Statistiche":
             mime="application/zip",
             help="Crea un backup in formato .zip e lo scarica direttamente."
         )
+
+    # --- ARCHIVIO ANNO SCOLASTICO ---
+    st.header("📦 Archivia anno scolastico")
+    st.info(
+        "Copia storico e assenze dell'anno corrente in fogli separati nel documento Google "
+        "(es. archivio_storico_2024-25), poi svuota i fogli attivi per il nuovo anno. "
+        "L'orario non viene toccato."
+    )
+    anno_input = st.text_input(
+        "Anno scolastico da archiviare",
+        placeholder="es. 2024-25",
+        max_chars=10
+    )
+    conferma_archivio = st.checkbox(
+        "Confermo: voglio archiviare l'anno e azzerare storico e assenze attivi",
+        key="conf_archivio"
+    )
+    if st.button("📦 Archivia anno scolastico", key="btn_archivio"):
+        if not anno_input.strip():
+            st.warning("Inserisci l'anno scolastico (es. 2024-25).")
+        elif not conferma_archivio:
+            st.warning("Spunta la casella di conferma prima di procedere.")
+        else:
+            with st.spinner("Archiviazione in corso..."):
+                if archivia_anno_scolastico(anno_input.strip()):
+                    st.success(
+                        f"Anno {anno_input.strip()} archiviato ✅ "
+                        f"I fogli archivio_storico_{anno_input.strip().replace('/', '-')} e "
+                        f"archivio_assenze_{anno_input.strip().replace('/', '-')} "
+                        f"sono ora disponibili nel documento Google."
+                    )
