@@ -103,17 +103,49 @@ h3, h4 { color: var(--color-ink) !important; }
     border-radius: 14px;
 }
 
-/* Menu di navigazione (segmented control) */
+/* Eyebrow sopra il titolo */
+.app-eyebrow {
+    font-size: 0.85em;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--color-ink);
+    margin-bottom: 0.1em;
+}
+
+/* Menu di navigazione (segmented control): pillole compatte, tan quando inattive */
 [data-testid="stSegmentedControl"] label {
-    border-radius: 10px !important;
-    border-color: var(--color-sage) !important;
+    border-radius: 999px !important;
+    border: none !important;
+    background-color: var(--color-terracotta-soft) !important;
+}
+[data-testid="stSegmentedControl"] label p {
+    color: var(--color-ink) !important;
+    font-weight: 500 !important;
 }
 [data-testid="stSegmentedControl"] label[aria-checked="true"] {
     background-color: var(--color-terracotta) !important;
-    border-color: var(--color-terracotta) !important;
 }
 [data-testid="stSegmentedControl"] label[aria-checked="true"] p {
     color: #FFFDF8 !important;
+    font-weight: 600 !important;
+}
+
+/* Pillole di selezione sostituto (st.pills) */
+[data-testid="stPills"] label {
+    border-radius: 999px !important;
+    border: 1px solid var(--color-border) !important;
+    background-color: var(--color-surface) !important;
+}
+[data-testid="stPills"] label p {
+    color: var(--color-ink) !important;
+}
+[data-testid="stPills"] label[aria-checked="true"] {
+    background-color: var(--color-terracotta) !important;
+    border-color: var(--color-terracotta) !important;
+}
+[data-testid="stPills"] label[aria-checked="true"] p {
+    color: #FFFDF8 !important;
+    font-weight: 600 !important;
 }
 
 /* Statistiche: metriche come card */
@@ -139,6 +171,7 @@ h3, h4 { color: var(--color-ink) !important; }
 # CONFIGURAZIONE FILE / SHEETS
 # =========================
 REQUIRED_COLUMNS = ["Docente", "Giorno", "Ora", "Classe", "Tipo", "Escludi"]
+EYEBROW_TEXT = "Direzione A — Diario di classe"  # personalizza o lascia "" per nasconderla
 SPREADSHEET_NAME = "OrarioSostituzioni"
 ORARIO_SHEET = "orario"
 STORICO_SHEET = "storico"
@@ -434,9 +467,9 @@ def vista_pivot_docenti(df, mode="docenti"):
         def color_cells(val):
             text = str(val)
             if "[S]" in text:
-                return "color: #C97D3D; font-weight: bold;"
+                return "color: #6B8F71; font-weight: bold;"
             elif text.strip() != "":
-                return "color: #6B8F71;"
+                return "color: #C97D3D;"
             return ""
 
         styled = pivot.style.map(color_cells)
@@ -491,6 +524,8 @@ def vista_pivot_docenti(df, mode="docenti"):
 # =========================
 # AVVIO APP
 # =========================
+if EYEBROW_TEXT:
+    st.markdown(f'<div class="app-eyebrow">{EYEBROW_TEXT}</div>', unsafe_allow_html=True)
 st.title("📚 Sostituzioni docenti")
 st.caption("Orari, assenze e sostituzioni in un'unica vista, pensata per il corridoio e per il telefono.")
 # assicurati che i fogli esistano con le intestazioni
@@ -714,7 +749,14 @@ elif menu == "Gestione Assenze":
                 def tipo_docente(d):
                     return docente_tipo_map.get(d, "")
 
-                # Per ogni ora scoperta costruisco la lista di opzioni con l'ordine richiesto
+                def pill_label(nome, tipo, np=False):
+                    """Etichetta della pillola: 🟢 sostegno, 🟠 curricolare; suffisso NP se il
+                    docente non ha lezione in quell'ora (quindi presumibilmente disponibile)."""
+                    icona = "🟢" if tipo == "sostegno" else "🟠"
+                    suffisso = " · NP" if np else ""
+                    return f"{icona} {nome}{suffisso}"
+
+                # Per ogni ora scoperta costruisco una card con le pillole selezionabili
                 for _, row in ore_assenti.iterrows():
                     ora = row["Ora"]
                     classe = row["Classe"]
@@ -731,30 +773,32 @@ elif menu == "Gestione Assenze":
 
                     added = set()
                     options = ["Nessuno"]
+                    nome_per_label = {"Nessuno": "Nessuno"}
 
-                    # 1) Sostegni della stessa classe in quell'ora -> [S]
+                    # 1) Sostegni della stessa classe in quell'ora
                     same_class_sost = presenti_ora_df[
                         (presenti_ora_df["Tipo"].str.lower() == "sostegno") &
                         (presenti_ora_df["Classe"] == classe) &
                         (presenti_ora_df["Docente"] != assente)
                     ]["Docente"].unique().tolist()
                     for d in sorted(same_class_sost):
-                        label = f"[S] {d}"
-                        if d not in added:
-                            options.append(label); added.add(d)
+                        if d in added:
+                            continue
+                        label = pill_label(d, "sostegno")
+                        options.append(label); nome_per_label[label] = d; added.add(d)
 
-                    # 2) Altri sostegni presenti in quell'ora -> [S]
+                    # 2) Altri sostegni presenti in quell'ora
                     other_sost = presenti_ora_df[
                         (presenti_ora_df["Tipo"].str.lower() == "sostegno") &
                         (presenti_ora_df["Docente"] != assente)
                     ]["Docente"].unique().tolist()
                     for d in sorted(other_sost):
-                        if d in added: 
+                        if d in added:
                             continue
-                        label = f"[S] {d}"
-                        options.append(label); added.add(d)
+                        label = pill_label(d, "sostegno")
+                        options.append(label); nome_per_label[label] = d; added.add(d)
 
-                    # 3) Curricolari presenti in quell'ora -> [C]
+                    # 3) Curricolari presenti in quell'ora
                     curricolari_presenti = presenti_ora_df[
                         (presenti_ora_df["Tipo"].str.lower() != "sostegno") &
                         (presenti_ora_df["Docente"] != assente)
@@ -762,65 +806,61 @@ elif menu == "Gestione Assenze":
                     for d in sorted(curricolari_presenti):
                         if d in added:
                             continue
-                        label = f"[C] {d}"
-                        options.append(label); added.add(d)
+                        label = pill_label(d, "curricolare")
+                        options.append(label); nome_per_label[label] = d; added.add(d)
 
-                    # 4) Docenti che NON compaiono in quell'ora -> [S] [NP] o [C] [NP]
-                    # candidati NP: tutti i docenti presenti nell'orario generale MA non in 'presenti_ora', non assenti, non escludi
+                    # 4) Docenti che NON compaiono in quell'ora (NP, presumibilmente disponibili)
                     presenti_ora_set = set(presenti_ora)
                     np_candidates = [d for d in tutti_docenti if d not in presenti_ora_set and d != assente and d not in escludi_docenti]
 
-                    # separo NP in S e C (in base al "Tipo" trovato nell'orario)
-                    np_sost = []
-                    np_curr = []
+                    np_sost, np_curr = [], []
                     for d in np_candidates:
-                        t = tipo_docente(d).lower()
-                        if t == "sostegno":
-                            np_sost.append(d)
-                        else:
-                            np_curr.append(d)
+                        (np_sost if tipo_docente(d).lower() == "sostegno" else np_curr).append(d)
 
-                    # Aggiungo prima NP sostegni, poi NP curricolari
                     for d in sorted(np_sost):
                         if d in added:
                             continue
-                        label = f"[S] [NP] {d}"
-                        options.append(label); added.add(d)
+                        label = pill_label(d, "sostegno", np=True)
+                        options.append(label); nome_per_label[label] = d; added.add(d)
 
                     for d in sorted(np_curr):
                         if d in added:
                             continue
-                        label = f"[C] [NP] {d}"
-                        options.append(label); added.add(d)
+                        label = pill_label(d, "curricolare", np=True)
+                        options.append(label); nome_per_label[label] = d; added.add(d)
 
-                    # Rimuovo eventuali docenti esclusi (già filtrati) e assente (già escluso)
-                    # --- suggerimento automatico (come prima gerarchia) ---
-                    proposto_display = "Nessuno"
-                    if len(same_class_sost) > 0:
-                        proposto_display = f"[S] {sorted(same_class_sost)[0]}"
-                    elif len(other_sost) > 0:
-                        proposto_display = f"[S] {sorted(other_sost)[0]}"
-                    elif len(curricolari_presenti) > 0:
-                        proposto_display = f"[C] {sorted(curricolari_presenti)[0]}"
-                    elif len(np_sost) > 0:
-                        proposto_display = f"[S] [NP] {sorted(np_sost)[0]}"
-                    elif len(np_curr) > 0:
-                        proposto_display = f"[C] [NP] {sorted(np_curr)[0]}"
+                    # --- suggerimento automatico (stessa gerarchia di prima) ---
+                    proposto = None
+                    if same_class_sost:
+                        proposto = pill_label(sorted(same_class_sost)[0], "sostegno")
+                    elif other_sost:
+                        proposto = pill_label(sorted(other_sost)[0], "sostegno")
+                    elif curricolari_presenti:
+                        proposto = pill_label(sorted(curricolari_presenti)[0], "curricolare")
+                    elif np_sost:
+                        proposto = pill_label(sorted(np_sost)[0], "sostegno", np=True)
+                    elif np_curr:
+                        proposto = pill_label(sorted(np_curr)[0], "curricolare", np=True)
+                    if proposto not in options:
+                        proposto = "Nessuno"
 
-                    default_index = options.index(proposto_display) if proposto_display in options else 0
+                    with st.container(border=True):
+                        st.markdown(f"**{ora} ora · classe {classe}**")
+                        st.caption(f"Assente: {assente}")
+                        scelta = st.pills(
+                            "Sostituto",
+                            options,
+                            selection_mode="single",
+                            default=proposto,
+                            label_visibility="collapsed",
+                            key=f"sost_{assente}_{ora}_{classe}"
+                        )
 
-                    scelta = st.selectbox(
-                        f"Sostituto per {ora} ora - Classe {classe} (assente {assente})",
-                        options,
-                        index=default_index,
-                        key=f"sost_{assente}_{ora}_{classe}"
-                    )
+                    # con la pillola si può deselezionare: in quel caso equivale a "Nessuno"
+                    if scelta is None:
+                        scelta = "Nessuno"
 
-                    # pulisco il nome per lo storico (rimuovo prefissi tipo "[S] [NP] " ecc.)
-                    if scelta == "Nessuno":
-                        nome_pulito = "Nessuno"
-                    else:
-                        nome_pulito = scelta.replace("[S] [NP] ", "").replace("[C] [NP] ", "").replace("[S] ", "").replace("[C] ", "").strip()
+                    nome_pulito = nome_per_label.get(scelta, scelta)
 
                     sostituzioni.append({
                         "Ora": ora,
@@ -838,7 +878,7 @@ elif menu == "Gestione Assenze":
                     sostituzioni_df["Ora"] = pd.Categorical(sostituzioni_df["Ora"], categories=ordine_ore, ordered=True)
                     sostituzioni_df = sostituzioni_df.sort_values("Ora").reset_index(drop=True)
 
-                # --- VISTA TABELLA (mostra la label con [S]/[C]/[NP]) ---
+                # --- VISTA TABELLA (mostra la label con 🟢/🟠/NP scelta nelle pillole) ---
                 st.subheader("📋 Sostituzioni in tabella")
                 tabella_df = sostituzioni_df[["Ora", "Classe", "Assente", "Sostituto_display"]].copy()
                 tabella_df = tabella_df.rename(columns={"Sostituto_display": "Sostituzione"})
