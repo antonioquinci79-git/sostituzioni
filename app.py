@@ -559,6 +559,40 @@ elif menu == "Gestione Assenze":
         if giorno_assente not in GIORNI_SETTIMANA:
             st.warning(f"Hai selezionato {giorno_assente}, un giorno non presente nell'orario scolastico (Lun-Ven).")
 
+        # =========================
+        # CLASSI IN USCITA DIDATTICA (libera i curricolari di quelle classi)
+        # =========================
+        classi_uscita_per_ora = {}  # {ora: set(classi in uscita in quell'ora)}
+        with st.expander("🚌 Classi in uscita didattica (oggi)"):
+            st.caption(
+                "Se una o più classi sono in uscita, i docenti curricolari [C] che in "
+                "quell'ora avrebbero lezione con quella classe risultano liberi e "
+                "selezionabili come sostituti, senza generare un conflitto alla conferma."
+            )
+            classi_disponibili = sorted(orario_df["Classe"].unique()) if not orario_df.empty else []
+            classi_uscita_selezionate = st.multiselect(
+                "Classi in uscita",
+                classi_disponibili,
+                key="classi_uscita_multiselect"
+            )
+            for classe_u in classi_uscita_selezionate:
+                ore_classe_u = [o for o in ORE_LEZIONE if not orario_df[
+                    (orario_df["Classe"] == classe_u) &
+                    (orario_df["Giorno"] == giorno_assente) &
+                    (orario_df["Ora"] == o)
+                ].empty]
+                if not ore_classe_u:
+                    st.caption(f"⚠️ {classe_u} non ha lezioni previste {giorno_assente}.")
+                    continue
+                ore_scelte_u = st.multiselect(
+                    f"Ore in uscita per {classe_u} (default: tutta la giornata)",
+                    ore_classe_u,
+                    default=ore_classe_u,
+                    key=f"ore_uscita_{classe_u}"
+                )
+                for ora_u in ore_scelte_u:
+                    classi_uscita_per_ora.setdefault(ora_u, set()).add(classe_u)
+
         if not docenti_assenti:
             st.info("Seleziona almeno un docente per continuare.")
         else:
@@ -611,6 +645,9 @@ elif menu == "Gestione Assenze":
                 # Precalcolo: tutti i docenti (escludiamo definitivamente chi ha Escludi=True)
                 tutti_docenti = sorted(orario_df["Docente"].unique())
                 escludi_docenti = set(orario_df[orario_df["Escludi"]]["Docente"].unique())
+                # Tutti i docenti assenti oggi (non solo quello della singola ora): nessuno di
+                # loro può comparire come possibile sostituto, in nessuna ora.
+                docenti_assenti_set = set(docenti_assenti)
 
                 # Mappa docente -> tipo, calcolata UNA volta sola (prima costava un filtro
                 # su tutto orario_df per ogni singolo docente, ad ogni ora scoperta)
@@ -624,11 +661,13 @@ elif menu == "Gestione Assenze":
                     classe = row["Classe"]
                     assente = row["Docente"]
 
-                    # Docenti presenti in quell'ora (escludiamo chi ha Escludi=True)
+                    # Docenti presenti in quell'ora (escludiamo chi ha Escludi=True e
+                    # chiunque sia stato segnato assente oggi, non solo l'assente di questa riga)
                     presenti_ora_df = orario_df[
                         (orario_df["Giorno"] == giorno_assente) &
                         (orario_df["Ora"] == ora) &
-                        (~orario_df["Escludi"])
+                        (~orario_df["Escludi"]) &
+                        (~orario_df["Docente"].isin(docenti_assenti_set))
                     ].copy()
 
                     presenti_ora = list(dict.fromkeys(presenti_ora_df["Docente"].tolist()))  # mantiene ordine stabile
@@ -658,21 +697,47 @@ elif menu == "Gestione Assenze":
                         label = f"[S] {d}"
                         options.append(label); added.add(d)
 
-                    # 3) Curricolari presenti in quell'ora -> [C]
-                    curricolari_presenti = presenti_ora_df[
+                    # 3) Curricolari presenti in quell'ora -> [C], a meno che la loro
+                    # classe non sia in uscita didattica in quell'ora (in tal caso sono
+                    # liberi -> [C] [USCITA])
+                    curricolari_presenti_df = presenti_ora_df[
                         (presenti_ora_df["Tipo"].str.lower() != "sostegno") &
                         (presenti_ora_df["Docente"] != assente)
+                    ]
+                    uscita_classi_ora = classi_uscita_per_ora.get(ora, set())
+
+                    curricolari_liberi_uscita = curricolari_presenti_df[
+                        curricolari_presenti_df["Classe"].isin(uscita_classi_ora)
                     ]["Docente"].unique().tolist()
-                    for d in sorted(curricolari_presenti):
+
+                    curricolari_occupati = curricolari_presenti_df[
+                        ~curricolari_presenti_df["Classe"].isin(uscita_classi_ora)
+                    ]["Docente"].unique().tolist()
+
+                    # 3a) Curricolari liberi perché la classe è in uscita -> [C] [USCITA]
+                    for d in sorted(curricolari_liberi_uscita):
+                        if d in added:
+                            continue
+                        label = f"[C] [USCITA] {d}"
+                        options.append(label); added.add(d)
+
+                    # 3b) Curricolari realmente occupati in quell'ora -> [C]
+                    for d in sorted(curricolari_occupati):
                         if d in added:
                             continue
                         label = f"[C] {d}"
                         options.append(label); added.add(d)
 
                     # 4) Docenti che NON compaiono in quell'ora -> [S] [NP] o [C] [NP]
-                    # candidati NP: tutti i docenti presenti nell'orario generale MA non in 'presenti_ora', non assenti, non escludi
+                    # candidati NP: tutti i docenti presenti nell'orario generale MA non in 'presenti_ora',
+                    # non assenti oggi (nessuno di loro), non escludi
                     presenti_ora_set = set(presenti_ora)
-                    np_candidates = [d for d in tutti_docenti if d not in presenti_ora_set and d != assente and d not in escludi_docenti]
+                    np_candidates = [
+                        d for d in tutti_docenti
+                        if d not in presenti_ora_set
+                        and d not in docenti_assenti_set
+                        and d not in escludi_docenti
+                    ]
 
                     # separo NP in S e C (in base al "Tipo" trovato nell'orario)
                     np_sost = []
@@ -698,14 +763,17 @@ elif menu == "Gestione Assenze":
                         options.append(label); added.add(d)
 
                     # Rimuovo eventuali docenti esclusi (già filtrati) e assente (già escluso)
-                    # --- suggerimento automatico (come prima gerarchia) ---
+                    # --- suggerimento automatico (come prima gerarchia, con i liberi per
+                    # uscita subito dopo i sostegni e prima dei curricolari davvero occupati) ---
                     proposto_display = "Nessuno"
                     if len(same_class_sost) > 0:
                         proposto_display = f"[S] {sorted(same_class_sost)[0]}"
                     elif len(other_sost) > 0:
                         proposto_display = f"[S] {sorted(other_sost)[0]}"
-                    elif len(curricolari_presenti) > 0:
-                        proposto_display = f"[C] {sorted(curricolari_presenti)[0]}"
+                    elif len(curricolari_liberi_uscita) > 0:
+                        proposto_display = f"[C] [USCITA] {sorted(curricolari_liberi_uscita)[0]}"
+                    elif len(curricolari_occupati) > 0:
+                        proposto_display = f"[C] {sorted(curricolari_occupati)[0]}"
                     elif len(np_sost) > 0:
                         proposto_display = f"[S] [NP] {sorted(np_sost)[0]}"
                     elif len(np_curr) > 0:
@@ -724,7 +792,14 @@ elif menu == "Gestione Assenze":
                     if scelta == "Nessuno":
                         nome_pulito = "Nessuno"
                     else:
-                        nome_pulito = scelta.replace("[S] [NP] ", "").replace("[C] [NP] ", "").replace("[S] ", "").replace("[C] ", "").strip()
+                        nome_pulito = (
+                            scelta.replace("[S] [NP] ", "")
+                                  .replace("[C] [NP] ", "")
+                                  .replace("[C] [USCITA] ", "")
+                                  .replace("[S] ", "")
+                                  .replace("[C] ", "")
+                                  .strip()
+                        )
 
                     sostituzioni.append({
                         "Ora": ora,
@@ -799,17 +874,22 @@ elif menu == "Gestione Assenze":
                         if duplicati:
                             conflitti.append((ora_val, list(set(duplicati))))
 
-                        # 2) Conflitto: docente scelto ma già in orario in quell’ora (SOLO curricolari)
+                        # 2) Conflitto: docente scelto ma già in orario in quell’ora (SOLO
+                        # curricolari, e solo se la sua classe in quell’ora NON è in uscita)
                         for s in sostituti:
                             # recupero il tipo del docente dalla mappa precalcolata
                             tipo = docente_tipo_map.get(s, "").lower()
                             if tipo != "sostegno":
-                                if not orario_df[
+                                lezione_in_quell_ora = orario_df[
                                     (orario_df["Docente"] == s) &
                                     (orario_df["Giorno"] == giorno_assente) &
                                     (orario_df["Ora"] == ora_val)
-                                ].empty:
-                                    conflitti_orario.append((ora_val, s))
+                                ]
+                                if not lezione_in_quell_ora.empty:
+                                    classe_lezione = lezione_in_quell_ora.iloc[0]["Classe"]
+                                    classi_in_uscita_ora = classi_uscita_per_ora.get(ora_val, set())
+                                    if classe_lezione not in classi_in_uscita_ora:
+                                        conflitti_orario.append((ora_val, s))
 
                     if conflitti or conflitti_orario:
                         if conflitti:
