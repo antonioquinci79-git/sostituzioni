@@ -971,38 +971,43 @@ elif menu == "Statistiche":
     st.header("📊 Statistiche Sostituzioni")
     with st.spinner('Caricamento statistiche...'):
         df_storico, df_assenze = carica_statistiche()
+
+    def render_cards(titolo, righe, colore):
+        """Renderizza un blocco card colorato con titolo e lista di (nome, valore)."""
+        medaglie = ["🥇", "🥈", "🥉"]
+        items_html = ""
+        for i, (nome, val) in enumerate(righe):
+            medaglia = medaglie[i] if i < 3 else ""
+            items_html += f"""
+  <div style="display:flex;justify-content:space-between;align-items:center;
+              padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.25);">
+    <span style="font-size:1.05em;">{medaglia} {nome.title()}</span>
+    <span style="font-size:1.1em;font-weight:bold;white-space:nowrap;margin-left:12px;">{val} ore</span>
+  </div>"""
+        st.markdown(f"""
+<div style="background:{colore};border-radius:14px;padding:16px 20px;color:white;margin-bottom:16px;">
+  <div style="font-size:0.85em;font-weight:600;opacity:0.85;margin-bottom:6px;">{titolo}</div>
+  {items_html}
+</div>""", unsafe_allow_html=True)
+
     if df_storico.empty:
         st.info("Nessuna statistica disponibile. Registra prima delle sostituzioni.")
     else:
-        # Crea il DataFrame aggregato per la tabella e per il grafico
         df_sum = df_storico.groupby("docente")["ore"].sum().reset_index()
         df_sum = df_sum.rename(columns={"ore": "Totale Ore Sostituite"})
+        df_sorted = df_sum.sort_values("Totale Ore Sostituite", ascending=False).reset_index(drop=True)
 
-        # Caselle evidenziate: chi sostituisce di più e chi di meno
-        doc_max = df_sum.loc[df_sum["Totale Ore Sostituite"].idxmax()]
-        doc_min = df_sum.loc[df_sum["Totale Ore Sostituite"].idxmin()]
-        col_max, col_min = st.columns(2)
-        with col_max:
-            st.markdown(f"""
-<div style="background:#fde8e8;border:2px solid #e05c5c;border-radius:12px;padding:14px;text-align:center;">
-  <div style="font-size:0.85em;color:#a00;font-weight:600;">🔴 Più sostituzioni</div>
-  <div style="font-size:1.3em;font-weight:bold;margin:4px 0;">{doc_max['docente'].title()}</div>
-  <div style="font-size:1.1em;color:#c00;">{int(doc_max['Totale Ore Sostituite'])} ore</div>
-</div>""", unsafe_allow_html=True)
-        with col_min:
-            st.markdown(f"""
-<div style="background:#e8f5e9;border:2px solid #4caf50;border-radius:12px;padding:14px;text-align:center;">
-  <div style="font-size:0.85em;color:#2e7d32;font-weight:600;">🟢 Meno sostituzioni</div>
-  <div style="font-size:1.3em;font-weight:bold;margin:4px 0;">{doc_min['docente'].title()}</div>
-  <div style="font-size:1.1em;color:#388e3c;">{int(doc_min['Totale Ore Sostituite'])} ore</div>
-</div>""", unsafe_allow_html=True)
-        st.markdown("<div style='margin-top:16px'></div>", unsafe_allow_html=True)
+        top3 = [(r["docente"], int(r["Totale Ore Sostituite"])) for _, r in df_sorted.head(3).iterrows()]
+        bot3 = [(r["docente"], int(r["Totale Ore Sostituite"])) for _, r in df_sorted.tail(3).iloc[::-1].iterrows()]
 
-        # Mostra la tabella con i dati aggregati
-        st.dataframe(df_sum, use_container_width=True, hide_index=True)
+        col_top, col_bot = st.columns(2)
+        with col_top:
+            render_cards("🟢 Più sostituzioni", top3, "#2e7d32")
+        with col_bot:
+            render_cards("🟠 Meno sostituzioni", bot3, "#e65100")
 
-        # Mostra il grafico a barre
-        st.bar_chart(df_sum.set_index("docente"))
+        st.dataframe(df_sorted, use_container_width=True, hide_index=True)
+        st.bar_chart(df_sorted.set_index("docente"))
 
     st.subheader("⚠️ Azzeramento storico sostituzioni")
     conferma = st.checkbox("Confermo di voler cancellare definitivamente lo storico delle sostituzioni", key="conf_storico")
@@ -1018,8 +1023,13 @@ elif menu == "Statistiche":
     if df_assenze.empty:
         st.info("Nessuna assenza registrata.")
     else:
-        st.dataframe(df_assenze, use_container_width=True, hide_index=True)
         df_assenze_agg = df_assenze.groupby("docente")["ora"].count().reset_index().rename(columns={"ora": "Totale Ore Assenti"})
+        df_assenze_agg = df_assenze_agg.sort_values("Totale Ore Assenti", ascending=False).reset_index(drop=True)
+
+        top3_assenze = [(r["docente"], int(r["Totale Ore Assenti"])) for _, r in df_assenze_agg.head(3).iterrows()]
+        render_cards("🟠 Più assenze", top3_assenze, "#e65100")
+
+        st.dataframe(df_assenze_agg, use_container_width=True, hide_index=True)
         st.bar_chart(df_assenze_agg.set_index("docente"))
 
     st.subheader("⚠️ Azzeramento storico assenze")
