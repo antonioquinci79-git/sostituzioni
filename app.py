@@ -14,89 +14,22 @@ from datetime import datetime
 # =========================
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Spectral:wght@500;600&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@500;600&display=swap');
-
-:root {
-    --ink: #1F2A44;
-    --ink-soft: #46506B;
-    --paper: #EFEFE6;
-    --paper-line: #DEDCC8;
-    --verde-lavagna: #2F6F4E;
-    --verde-lavagna-bg: #E4F0E8;
-    --blu-inchiostro: #2C4A7C;
-    --blu-inchiostro-bg: #E4ECF5;
-    --arancio-bus: #C97A26;
-    --arancio-bus-bg: #FBEBD7;
-    --rosso-penna: #B23A2E;
-    --rosso-penna-bg: #FBEAE8;
-    --grigio-np: #8A8775;
-    --grigio-np-bg: #EFEEE7;
-}
-
-/* Sfondo a quadretti, come la pagina di un quaderno */
-.stApp {
-    background-color: var(--paper);
-    background-image:
-        linear-gradient(var(--paper-line) 1px, transparent 1px),
-        linear-gradient(90deg, var(--paper-line) 1px, transparent 1px);
-    background-size: 24px 24px;
-}
-
-/* Font di base in tutta l'app */
-html, body, [class*="css"] {
-    font-family: 'IBM Plex Sans', sans-serif;
-}
-
-/* Titoli in serif, colore inchiostro */
-h1, h2, h3 {
-    font-family: 'Spectral', serif !important;
-    color: var(--ink) !important;
-    font-weight: 600 !important;
-}
-
-/* Bottoni più grandi, stile "timbro" */
+/* Bottoni più grandi */
 .stButton button {
     width: 100%;
     padding: 0.8em;
-    font-size: 1em;
-    font-weight: 500;
+    font-size: 1.05em;
     border-radius: 12px;
-    border: 1.5px solid var(--blu-inchiostro);
-    color: var(--blu-inchiostro);
-    background-color: #FFFFFF;
-}
-.stButton button:hover {
-    background-color: var(--blu-inchiostro-bg);
-    border-color: var(--blu-inchiostro);
-    color: var(--blu-inchiostro);
 }
 
 /* Tabelle: font più piccolo e leggibile */
 .stDataFrame, .stDataEditor {
     font-size: 0.9em !important;
-    font-family: 'IBM Plex Sans', sans-serif !important;
-    border-radius: 10px !important;
 }
 
-/* Input: allarga i selectbox, angoli arrotondati */
+/* Input: allarga i selectbox */
 .stSelectbox, .stTextInput, .stDateInput, .stMultiSelect {
     width: 100% !important;
-}
-.stSelectbox > div > div, .stTextInput > div > div, .stDateInput > div > div, .stMultiSelect > div > div {
-    border-radius: 10px !important;
-}
-
-/* Expander come schede di carta */
-.stExpander {
-    border: 1px solid var(--paper-line) !important;
-    border-radius: 12px !important;
-    background-color: #FFFFFF;
-}
-
-/* Avvisi più arrotondati, coerenti con il resto */
-.stAlert {
-    border-radius: 10px !important;
-    font-family: 'IBM Plex Sans', sans-serif !important;
 }
 
 /* Margini orizzontali per respirare su mobile */
@@ -104,23 +37,6 @@ h1, h2, h3 {
     padding-left: 1rem;
     padding-right: 1rem;
 }
-
-/* Badge colorati per S / C / USCITA / NP nella tabella sostituzioni */
-.badge {
-    display: inline-block;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.78em;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    padding: 3px 9px;
-    border-radius: 999px;
-    white-space: nowrap;
-}
-.badge-sostegno { background-color: var(--verde-lavagna-bg); color: var(--verde-lavagna); }
-.badge-curricolare { background-color: var(--blu-inchiostro-bg); color: var(--blu-inchiostro); }
-.badge-uscita { background-color: var(--arancio-bus-bg); color: var(--arancio-bus); }
-.badge-np { border: 1px dashed currentColor; }
-.badge-none { background-color: var(--grigio-np-bg); color: var(--grigio-np); font-style: italic; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -391,29 +307,6 @@ def trova_conflitti_orario(df):
     conteggi = df.groupby(["Docente", "Giorno", "Ora"]).size()
     return [idx for idx, n in conteggi.items() if n > 1 and idx[0].strip() != ""]
 
-def badge_html(valore):
-    """Converte un'etichetta tipo '[S] Nome' / '[C] [USCITA] Nome' / 'Nessuno'
-    in un badge HTML colorato, coerente con la legenda S / C / USCITA / NP."""
-    testo = str(valore).strip()
-    if testo == "" or testo.lower() == "nessuno":
-        return '<span class="badge badge-none">nessuno</span>'
-    if testo.startswith("[S] [NP] "):
-        nome = testo.replace("[S] [NP] ", "")
-        return f'<span class="badge badge-sostegno badge-np">S · np · {nome}</span>'
-    if testo.startswith("[C] [NP] "):
-        nome = testo.replace("[C] [NP] ", "")
-        return f'<span class="badge badge-curricolare badge-np">C · np · {nome}</span>'
-    if testo.startswith("[C] [USCITA] "):
-        nome = testo.replace("[C] [USCITA] ", "")
-        return f'<span class="badge badge-uscita">C · uscita · {nome}</span>'
-    if testo.startswith("[S] "):
-        nome = testo.replace("[S] ", "")
-        return f'<span class="badge badge-sostegno">S · {nome}</span>'
-    if testo.startswith("[C] "):
-        nome = testo.replace("[C] ", "")
-        return f'<span class="badge badge-curricolare">C · {nome}</span>'
-    return testo
-
 def download_orario(df):
     if not df.empty:
         st.download_button(
@@ -446,9 +339,9 @@ def vista_pivot_docenti(df, mode="docenti"):
         def color_cells(val):
             text = str(val)
             if "[S]" in text:
-                return "color: #2F6F4E; font-weight: 600; font-family: 'IBM Plex Sans', sans-serif;"
+                return "color: green; font-weight: bold;"
             elif text.strip() != "":
-                return "color: #2C4A7C; font-family: 'IBM Plex Sans', sans-serif;"
+                return "color: blue;"
             return ""
 
         styled = pivot.style.map(color_cells)
@@ -747,15 +640,6 @@ elif menu == "Gestione Assenze":
 
 
                 st.subheader("🔄 Possibili sostituti")
-                st.markdown(
-                    '<div style="margin-bottom: 0.75rem;">'
-                    '<span class="badge badge-sostegno">S</span> sostegno&nbsp;&nbsp;'
-                    '<span class="badge badge-curricolare">C</span> curricolare&nbsp;&nbsp;'
-                    '<span class="badge badge-uscita">C · uscita</span> libero per uscita&nbsp;&nbsp;'
-                    '<span class="badge badge-curricolare badge-np">np</span> non presente in quell\'ora'
-                    '</div>',
-                    unsafe_allow_html=True
-                )
                 sostituzioni = []
 
                 # Precalcolo: tutti i docenti (escludiamo definitivamente chi ha Escludi=True)
@@ -933,33 +817,27 @@ elif menu == "Gestione Assenze":
                     sostituzioni_df["Ora"] = pd.Categorical(sostituzioni_df["Ora"], categories=ordine_ore, ordered=True)
                     sostituzioni_df = sostituzioni_df.sort_values("Ora").reset_index(drop=True)
 
-                # --- VISTA TABELLA (mostra la label con [S]/[C]/[NP]/[USCITA] come badge) ---
+                # --- VISTA TABELLA (mostra la label con [S]/[C]/[NP]) ---
                 st.subheader("📋 Sostituzioni in tabella")
                 tabella_df = sostituzioni_df[["Ora", "Classe", "Assente", "Sostituto_display"]].copy()
                 tabella_df = tabella_df.rename(columns={"Sostituto_display": "Sostituzione"})
                 tabella_df["Ora"] = pd.Categorical(tabella_df["Ora"], categories=ordine_ore, ordered=True)
                 tabella_df = tabella_df.sort_values(["Ora", "Classe"]).reset_index(drop=True)
-                tabella_df["Sostituzione"] = tabella_df["Sostituzione"].apply(badge_html)
 
                 styled_tabella = (
                     tabella_df.style
                         .set_table_styles([
                             {"selector": "th.col0", "props": [("width", "50px")]},
                             {"selector": "th.col1", "props": [("width", "80px")]},
-                            {"selector": "th", "props": [("background-color", "#E4ECF5"),
-                                                         ("color", "#1F2A44"),
-                                                         ("font-family", "'IBM Plex Sans', sans-serif"),
-                                                         ("font-weight", "600"),
+                            {"selector": "th", "props": [("background-color", "#f0f0f0"),
+                                                         ("font-weight", "bold"),
                                                          ("text-align", "center"),
-                                                         ("font-size", "14px"),
-                                                         ("padding", "8px 12px")]},
+                                                         ("font-size", "16px")]},
                             {"selector": "td", "props": [("text-align", "center"),
-                                                         ("padding", "8px 12px"),
-                                                         ("font-family", "'IBM Plex Sans', sans-serif"),
-                                                         ("color", "#1F2A44"),
-                                                         ("font-size", "14px")]}
+                                                         ("padding", "6px 12px"),
+                                                         ("font-size", "16px")]}
                         ])
-                        .apply(lambda x: ['background-color: #FBFAF4' if i % 2 else 'background-color: #FFFFFF'
+                        .apply(lambda x: ['background-color: #f9f9f9' if i % 2 else 'background-color: white'
                                           for i in range(len(x))], axis=0)
                 )
                 html = styled_tabella.hide(axis="index").to_html()
