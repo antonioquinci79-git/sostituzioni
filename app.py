@@ -1002,7 +1002,10 @@ elif menu == "Statistiche":
         # Per i "meno sostituzioni" filtro solo i docenti di sostegno [S],
         # inclusi quelli a zero ore (non presenti nello storico)
         docenti_sostegno = set(
-            orario_df[orario_df["Tipo"].str.lower() == "sostegno"]["Docente"].str.lower().unique()
+            orario_df[
+                (orario_df["Tipo"].str.lower() == "sostegno") &
+                (~orario_df["Escludi"])
+            ]["Docente"].str.lower().unique()
         )
         df_tutti_sost = pd.DataFrame({"docente": sorted(docenti_sostegno)})
         df_tutti_sost = df_tutti_sost.merge(
