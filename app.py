@@ -998,13 +998,26 @@ elif menu == "Statistiche":
         df_sorted = df_sum.sort_values("Totale Ore Sostituite", ascending=False).reset_index(drop=True)
 
         top3 = [(r["docente"], int(r["Totale Ore Sostituite"])) for _, r in df_sorted.head(3).iterrows()]
-        bot3 = [(r["docente"], int(r["Totale Ore Sostituite"])) for _, r in df_sorted.tail(3).iloc[::-1].iterrows()]
+
+        # Per i "meno sostituzioni" filtro solo i docenti di sostegno [S],
+        # inclusi quelli a zero ore (non presenti nello storico)
+        docenti_sostegno = set(
+            orario_df[orario_df["Tipo"].str.lower() == "sostegno"]["Docente"].str.lower().unique()
+        )
+        df_tutti_sost = pd.DataFrame({"docente": sorted(docenti_sostegno)})
+        df_tutti_sost = df_tutti_sost.merge(
+            df_sum.assign(docente=df_sum["docente"].str.lower()),
+            on="docente", how="left"
+        ).fillna(0)
+        df_tutti_sost["Totale Ore Sostituite"] = df_tutti_sost["Totale Ore Sostituite"].astype(int)
+        df_tutti_sost = df_tutti_sost.sort_values("Totale Ore Sostituite").reset_index(drop=True)
+        bot3 = [(r["docente"], int(r["Totale Ore Sostituite"])) for _, r in df_tutti_sost.head(3).iterrows()]
 
         col_top, col_bot = st.columns(2)
         with col_top:
             render_cards("🟢 Più sostituzioni", top3, "#2e7d32")
         with col_bot:
-            render_cards("🟠 Meno sostituzioni", bot3, "#e65100")
+            render_cards("🟠 Meno sostituzioni [S]", bot3, "#e65100")
 
         st.dataframe(df_sorted, use_container_width=True, hide_index=True)
         st.bar_chart(df_sorted.set_index("docente"))
