@@ -46,72 +46,6 @@ st.markdown("""
     margin: 3px !important;
     min-height: 2.4em !important;
 }
-
-/* ── Colori per categoria sostituto ── */
-
-/* [S] Sostegno → verde */
-[data-testid="stPills"] button[aria-label^="[S] [NP]"],
-[data-testid="stPills"] button[aria-label^="[S] "] {
-    background-color: #d4edda !important;
-    border-color: #28a745 !important;
-    color: #155724 !important;
-}
-[data-testid="stPills"] button[aria-label^="[S] [NP]"][aria-pressed="true"],
-[data-testid="stPills"] button[aria-label^="[S] "][aria-pressed="true"] {
-    background-color: #28a745 !important;
-    color: #fff !important;
-}
-
-/* [S] [NP] → verde più tenue (non presente in orario) */
-[data-testid="stPills"] button[aria-label^="[S] [NP]"] {
-    background-color: #eaf6ec !important;
-    border-color: #82c991 !important;
-    color: #2d6a3f !important;
-    opacity: 0.85;
-}
-[data-testid="stPills"] button[aria-label^="[S] [NP]"][aria-pressed="true"] {
-    background-color: #5cb87a !important;
-    color: #fff !important;
-    opacity: 1;
-}
-
-/* [C] Curricolare → blu */
-[data-testid="stPills"] button[aria-label^="[C] [NP]"],
-[data-testid="stPills"] button[aria-label^="[C] "] {
-    background-color: #cce5ff !important;
-    border-color: #004085 !important;
-    color: #004085 !important;
-}
-[data-testid="stPills"] button[aria-label^="[C] [NP]"][aria-pressed="true"],
-[data-testid="stPills"] button[aria-label^="[C] "][aria-pressed="true"] {
-    background-color: #0069d9 !important;
-    color: #fff !important;
-}
-
-/* [C] [NP] → blu più tenue */
-[data-testid="stPills"] button[aria-label^="[C] [NP]"] {
-    background-color: #e8f2ff !important;
-    border-color: #6ca0d4 !important;
-    color: #1a4a7a !important;
-    opacity: 0.85;
-}
-[data-testid="stPills"] button[aria-label^="[C] [NP]"][aria-pressed="true"] {
-    background-color: #4a90d9 !important;
-    color: #fff !important;
-    opacity: 1;
-}
-
-/* [C] [USCITA] → arancione */
-[data-testid="stPills"] button[aria-label^="[C] [USCITA]"] {
-    background-color: #fff3cd !important;
-    border-color: #e0a800 !important;
-    color: #856404 !important;
-    opacity: 1 !important;
-}
-[data-testid="stPills"] button[aria-label^="[C] [USCITA]"][aria-pressed="true"] {
-    background-color: #ffc107 !important;
-    color: #212529 !important;
-}
 </style>
 """, unsafe_allow_html=True)
 
@@ -620,12 +554,7 @@ elif menu == "Gestione Assenze":
     if orario_df.empty:
         st.warning("Non hai ancora caricato nessun orario.")
     else:
-        docenti_assenti = st.pills(
-            "Seleziona docenti assenti",
-            sorted(orario_df["Docente"].unique()),
-            selection_mode="multi",
-            key="pills_docenti_assenti"
-        )
+        docenti_assenti = st.multiselect("Seleziona docenti assenti", sorted(orario_df["Docente"].unique()))
         data_sostituzione = st.date_input("Data della sostituzione")
 
         # Giorno calcolato automaticamente dalla data (in italiano)
@@ -650,10 +579,9 @@ elif menu == "Gestione Assenze":
                 "selezionabili come sostituti, senza generare un conflitto alla conferma."
             )
             classi_disponibili = sorted(orario_df["Classe"].unique()) if not orario_df.empty else []
-            classi_uscita_selezionate = st.pills(
+            classi_uscita_selezionate = st.multiselect(
                 "Classi in uscita",
                 classi_disponibili,
-                selection_mode="multi",
                 key="classi_uscita_multiselect"
             )
             for classe_u in classi_uscita_selezionate:
@@ -665,11 +593,10 @@ elif menu == "Gestione Assenze":
                 if not ore_classe_u:
                     st.caption(f"⚠️ {classe_u} non ha lezioni previste {giorno_assente}.")
                     continue
-                ore_scelte_u = st.pills(
+                ore_scelte_u = st.multiselect(
                     f"Ore in uscita per {classe_u} (default: tutta la giornata)",
                     ore_classe_u,
                     default=ore_classe_u,
-                    selection_mode="multi",
                     key=f"ore_uscita_{classe_u}"
                 )
                 for ora_u in ore_scelte_u:
@@ -722,15 +649,6 @@ elif menu == "Gestione Assenze":
 
 
                 st.subheader("🔄 Possibili sostituti")
-                st.markdown("""
-<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;font-size:0.85em;">
-  <span style="background:#d4edda;border:1px solid #28a745;color:#155724;padding:3px 10px;border-radius:12px;">🟢 [S] Sostegno presente</span>
-  <span style="background:#eaf6ec;border:1px solid #82c991;color:#2d6a3f;padding:3px 10px;border-radius:12px;">🟩 [S][NP] Sostegno non in orario</span>
-  <span style="background:#cce5ff;border:1px solid #004085;color:#004085;padding:3px 10px;border-radius:12px;">🔵 [C] Curricolare presente</span>
-  <span style="background:#e8f2ff;border:1px solid #6ca0d4;color:#1a4a7a;padding:3px 10px;border-radius:12px;">🔹 [C][NP] Curricolare non in orario</span>
-  <span style="background:#fff3cd;border:1px solid #e0a800;color:#856404;padding:3px 10px;border-radius:12px;">🟡 [C][USCITA] Libero per uscita</span>
-</div>
-""", unsafe_allow_html=True)
                 sostituzioni = []
 
                 # Precalcolo: tutti i docenti (escludiamo definitivamente chi ha Escludi=True)
@@ -872,16 +790,12 @@ elif menu == "Gestione Assenze":
 
                     default_index = options.index(proposto_display) if proposto_display in options else 0
 
-                    scelta = st.pills(
-                        f"Sostituto per {ora} ora – Classe {classe} (assente: {assente})",
+                    scelta = st.selectbox(
+                        f"Sostituto per {ora} ora - Classe {classe} (assente {assente})",
                         options,
-                        default=options[default_index],
-                        selection_mode="single",
+                        index=default_index,
                         key=f"sost_{assente}_{ora}_{classe}"
                     )
-                    # pills può restituire None se l'utente deseleziona tutto
-                    if scelta is None:
-                        scelta = "Nessuno"
 
                     # pulisco il nome per lo storico (rimuovo prefissi tipo "[S] [NP] " ecc.)
                     if scelta == "Nessuno":
@@ -952,7 +866,18 @@ elif menu == "Gestione Assenze":
                             testo_output += f"👩‍🏫 Assente: {r['Assente']}\n"
                             testo_output += f"✅ Sostituzione: {sost_pulito}\n\n"
 
-                st.text_area("Testo pronto da copiare", value=testo_output.strip(), height=300)
+                testo_strip = testo_output.strip()
+                st.text_area("Testo pronto da copiare", value=testo_strip, height=300)
+                # Bottone "Copia negli appunti" via JavaScript
+                testo_js = testo_strip.replace("\\", "\\\\").replace("`", "\\`").replace("$", "\\$")
+                st.components.v1.html(f"""
+<button onclick="navigator.clipboard.writeText(`{testo_js}`).then(()=>{{
+    this.innerText='✅ Copiato!'; setTimeout(()=>this.innerText='📋 Copia negli appunti', 2000);
+}})" style="
+    width:100%; padding:0.7em; font-size:1em; font-weight:bold;
+    background:#0068c9; color:white; border:none; border-radius:10px; cursor:pointer;
+">📋 Copia negli appunti</button>
+""", height=55)
 
                 # --- Step 1: conferma (controllo conflitti) ---
                 if st.button("✅ Conferma tabella (non salva ancora)"):
@@ -1052,6 +977,26 @@ elif menu == "Statistiche":
         # Crea il DataFrame aggregato per la tabella e per il grafico
         df_sum = df_storico.groupby("docente")["ore"].sum().reset_index()
         df_sum = df_sum.rename(columns={"ore": "Totale Ore Sostituite"})
+
+        # Caselle evidenziate: chi sostituisce di più e chi di meno
+        doc_max = df_sum.loc[df_sum["Totale Ore Sostituite"].idxmax()]
+        doc_min = df_sum.loc[df_sum["Totale Ore Sostituite"].idxmin()]
+        col_max, col_min = st.columns(2)
+        with col_max:
+            st.markdown(f"""
+<div style="background:#fde8e8;border:2px solid #e05c5c;border-radius:12px;padding:14px;text-align:center;">
+  <div style="font-size:0.85em;color:#a00;font-weight:600;">🔴 Più sostituzioni</div>
+  <div style="font-size:1.3em;font-weight:bold;margin:4px 0;">{doc_max['docente'].title()}</div>
+  <div style="font-size:1.1em;color:#c00;">{int(doc_max['Totale Ore Sostituite'])} ore</div>
+</div>""", unsafe_allow_html=True)
+        with col_min:
+            st.markdown(f"""
+<div style="background:#e8f5e9;border:2px solid #4caf50;border-radius:12px;padding:14px;text-align:center;">
+  <div style="font-size:0.85em;color:#2e7d32;font-weight:600;">🟢 Meno sostituzioni</div>
+  <div style="font-size:1.3em;font-weight:bold;margin:4px 0;">{doc_min['docente'].title()}</div>
+  <div style="font-size:1.1em;color:#388e3c;">{int(doc_min['Totale Ore Sostituite'])} ore</div>
+</div>""", unsafe_allow_html=True)
+        st.markdown("<div style='margin-top:16px'></div>", unsafe_allow_html=True)
 
         # Mostra la tabella con i dati aggregati
         st.dataframe(df_sum, use_container_width=True, hide_index=True)
