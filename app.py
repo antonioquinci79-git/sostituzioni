@@ -961,15 +961,22 @@ elif menu == "Visualizza Orario":
     if orario_df.empty:
         st.warning("Nessun orario disponibile.")
     else:
-        ricerca = st.text_input("🔍 Cerca docente", placeholder="Scrivi il nome...").strip().lower()
-        if ricerca:
-            df_filtrato = orario_df[orario_df["Docente"].str.lower().str.contains(ricerca, na=False)]
+        docenti_selezionati = st.multiselect(
+            "🔍 Filtra per docente (lascia vuoto per vedere tutti)",
+            sorted(orario_df["Docente"].unique())
+        )
+        if docenti_selezionati:
+            # Righe dei docenti selezionati
+            df_base = orario_df[orario_df["Docente"].isin(docenti_selezionati)]
+            # Compresenze: sostegni che operano nelle stesse classe+giorno+ora
+            chiavi = df_base[["Classe", "Giorno", "Ora"]].drop_duplicates()
+            df_compresenze = orario_df[
+                orario_df["Tipo"].str.lower() == "sostegno"
+            ].merge(chiavi, on=["Classe", "Giorno", "Ora"], how="inner")
+            df_filtrato = pd.concat([df_base, df_compresenze]).drop_duplicates()
             if df_filtrato.empty:
-                st.warning("Nessun docente trovato.")
+                st.warning("Nessun risultato.")
             else:
-                docenti_trovati = df_filtrato["Docente"].unique()
-                if len(docenti_trovati) > 1:
-                    st.caption(f"Docenti trovati: {', '.join(docenti_trovati)}")
                 vista_pivot_docenti(df_filtrato, mode="classi")
         else:
             vista_pivot_docenti(orario_df, mode="classi")
