@@ -14,75 +14,17 @@ from datetime import datetime
 # =========================
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&display=swap');
-
-:root {
-    --color-bg: #F7F1E6;            /* sfondo carta calda */
-    --color-surface: #FFFFFF;       /* superfici/card */
-    --color-ink: #3A2E1F;           /* testo / inchiostro caldo */
-    --color-ink-soft: rgba(58, 46, 31, 0.62);
-    --color-terracotta: #C97D3D;    /* accento primario */
-    --color-terracotta-dark: #B0692E;
-    --color-terracotta-soft: #F1DEC8;
-    --color-sage: #6B8F71;          /* accento secondario */
-    --color-sage-soft: #E2EAE1;
-    --color-border: rgba(58, 46, 31, 0.18);
-}
-
-/* Sfondo generale e colore testo di base */
-.stApp {
-    background-color: var(--color-bg);
-    color: var(--color-ink);
-}
-
-/* Tipografia: tocco serif nei titoli, corpo testo invariato */
-h1 {
-    font-family: 'Source Serif 4', Georgia, serif !important;
-    font-weight: 700 !important;
-    color: var(--color-ink) !important;
-    border-bottom: 2px solid var(--color-terracotta);
-    padding-bottom: 0.3em;
-    margin-bottom: 0.7em !important;
-}
-h2 {
-    font-family: 'Source Serif 4', Georgia, serif !important;
-    font-weight: 600 !important;
-    color: var(--color-ink) !important;
-}
-h3, h4 { color: var(--color-ink) !important; }
-
-/* Bottoni: contorno salvia, accento terracotta su hover/azioni principali */
+/* Bottoni più grandi */
 .stButton button {
     width: 100%;
     padding: 0.8em;
     font-size: 1.05em;
     border-radius: 12px;
-    border: 1.5px solid var(--color-sage);
-    background-color: var(--color-surface);
-    color: var(--color-ink);
-    transition: all 0.15s ease;
-}
-.stButton button:hover {
-    border-color: var(--color-terracotta);
-    color: var(--color-terracotta);
-}
-.stButton button[kind="primary"] {
-    background-color: var(--color-terracotta);
-    border-color: var(--color-terracotta);
-    color: #FFFDF8 !important;
-}
-.stButton button[kind="primary"]:hover {
-    background-color: var(--color-terracotta-dark);
-    border-color: var(--color-terracotta-dark);
 }
 
-/* Tabelle: font più piccolo, cornice calda */
+/* Tabelle: font più piccolo e leggibile */
 .stDataFrame, .stDataEditor {
     font-size: 0.9em !important;
-}
-[data-testid="stDataFrame"], [data-testid="stDataEditor"] {
-    border: 1px solid var(--color-border);
-    border-radius: 10px;
 }
 
 /* Input: allarga i selectbox */
@@ -95,75 +37,6 @@ h3, h4 { color: var(--color-ink) !important; }
     padding-left: 1rem;
     padding-right: 1rem;
 }
-
-/* Card per i container con bordo (gruppi logici) */
-[data-testid="stVerticalBlockBorderWrapper"] {
-    background-color: var(--color-surface);
-    border: 1px solid var(--color-border) !important;
-    border-radius: 14px;
-}
-
-/* Eyebrow sopra il titolo */
-.app-eyebrow {
-    font-size: 0.85em;
-    font-weight: 600;
-    letter-spacing: 0.01em;
-    color: var(--color-ink);
-    margin-bottom: 0.1em;
-}
-
-/* Menu di navigazione (segmented control): pillole compatte, tan quando inattive */
-[data-testid="stSegmentedControl"] label {
-    border-radius: 999px !important;
-    border: none !important;
-    background-color: var(--color-terracotta-soft) !important;
-}
-[data-testid="stSegmentedControl"] label p {
-    color: var(--color-ink) !important;
-    font-weight: 500 !important;
-}
-[data-testid="stSegmentedControl"] label[aria-checked="true"] {
-    background-color: var(--color-terracotta) !important;
-}
-[data-testid="stSegmentedControl"] label[aria-checked="true"] p {
-    color: #FFFDF8 !important;
-    font-weight: 600 !important;
-}
-
-/* Pillole di selezione sostituto (st.pills) */
-[data-testid="stPills"] label {
-    border-radius: 999px !important;
-    border: 1px solid var(--color-border) !important;
-    background-color: var(--color-surface) !important;
-}
-[data-testid="stPills"] label p {
-    color: var(--color-ink) !important;
-}
-[data-testid="stPills"] label[aria-checked="true"] {
-    background-color: var(--color-terracotta) !important;
-    border-color: var(--color-terracotta) !important;
-}
-[data-testid="stPills"] label[aria-checked="true"] p {
-    color: #FFFDF8 !important;
-    font-weight: 600 !important;
-}
-
-/* Statistiche: metriche come card */
-[data-testid="stMetric"] {
-    background-color: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: 12px;
-    padding: 0.8em 1em;
-}
-[data-testid="stMetricValue"] { color: var(--color-terracotta) !important; }
-[data-testid="stMetricLabel"] { color: var(--color-ink-soft) !important; }
-
-/* Expander */
-[data-testid="stExpander"] {
-    border: 1px solid var(--color-border) !important;
-    border-radius: 12px !important;
-    background-color: var(--color-surface);
-}
 </style>
 """, unsafe_allow_html=True)
 
@@ -171,7 +44,6 @@ h3, h4 { color: var(--color-ink) !important; }
 # CONFIGURAZIONE FILE / SHEETS
 # =========================
 REQUIRED_COLUMNS = ["Docente", "Giorno", "Ora", "Classe", "Tipo", "Escludi"]
-EYEBROW_TEXT = "Direzione A — Diario di classe"  # personalizza o lascia "" per nasconderla
 SPREADSHEET_NAME = "OrarioSostituzioni"
 ORARIO_SHEET = "orario"
 STORICO_SHEET = "storico"
@@ -467,9 +339,9 @@ def vista_pivot_docenti(df, mode="docenti"):
         def color_cells(val):
             text = str(val)
             if "[S]" in text:
-                return "color: #6B8F71; font-weight: bold;"
+                return "color: green; font-weight: bold;"
             elif text.strip() != "":
-                return "color: #C97D3D;"
+                return "color: blue;"
             return ""
 
         styled = pivot.style.map(color_cells)
@@ -524,10 +396,7 @@ def vista_pivot_docenti(df, mode="docenti"):
 # =========================
 # AVVIO APP
 # =========================
-if EYEBROW_TEXT:
-    st.markdown(f'<div class="app-eyebrow">{EYEBROW_TEXT}</div>', unsafe_allow_html=True)
-st.title("📚 Sostituzioni docenti")
-st.caption("Orari, assenze e sostituzioni in un'unica vista, pensata per il corridoio e per il telefono.")
+st.title("📚Sostituzioni docenti")
 # assicurati che i fogli esistano con le intestazioni
 try:
     with st.spinner('Caricamento dati...'):
@@ -602,7 +471,7 @@ if menu == "Inserisci/Modifica Orario":
             classe = st.text_input("Inserisci nuova classe")
         tipo = st.selectbox("Tipo", TIPI_LEZIONE)
         escludi = st.checkbox("Escludi da sostituzioni")
-        if st.button("Aggiungi", key="add_lesson", type="primary"):
+        if st.button("Aggiungi", key="add_lesson"):
             if docente and giorno and ora and classe and tipo:
                 row = {
                     "Docente": docente,
@@ -648,7 +517,7 @@ if menu == "Inserisci/Modifica Orario":
                 "Classe": st.column_config.TextColumn("Classe", required=True),
             }
         )
-        if st.button("Salva modifiche", type="primary"):
+        if st.button("Salva modifiche"):
             df_da_salvare = edited_df.copy()
             for col in ["Docente", "Giorno", "Ora", "Classe", "Tipo"]:
                 df_da_salvare[col] = df_da_salvare[col].astype(str).str.strip()
@@ -749,14 +618,7 @@ elif menu == "Gestione Assenze":
                 def tipo_docente(d):
                     return docente_tipo_map.get(d, "")
 
-                def pill_label(nome, tipo, np=False):
-                    """Etichetta della pillola: 🟢 sostegno, 🟠 curricolare; suffisso NP se il
-                    docente non ha lezione in quell'ora (quindi presumibilmente disponibile)."""
-                    icona = "🟢" if tipo == "sostegno" else "🟠"
-                    suffisso = " · NP" if np else ""
-                    return f"{icona} {nome}{suffisso}"
-
-                # Per ogni ora scoperta costruisco una card con le pillole selezionabili
+                # Per ogni ora scoperta costruisco la lista di opzioni con l'ordine richiesto
                 for _, row in ore_assenti.iterrows():
                     ora = row["Ora"]
                     classe = row["Classe"]
@@ -773,32 +635,30 @@ elif menu == "Gestione Assenze":
 
                     added = set()
                     options = ["Nessuno"]
-                    nome_per_label = {"Nessuno": "Nessuno"}
 
-                    # 1) Sostegni della stessa classe in quell'ora
+                    # 1) Sostegni della stessa classe in quell'ora -> [S]
                     same_class_sost = presenti_ora_df[
                         (presenti_ora_df["Tipo"].str.lower() == "sostegno") &
                         (presenti_ora_df["Classe"] == classe) &
                         (presenti_ora_df["Docente"] != assente)
                     ]["Docente"].unique().tolist()
                     for d in sorted(same_class_sost):
-                        if d in added:
-                            continue
-                        label = pill_label(d, "sostegno")
-                        options.append(label); nome_per_label[label] = d; added.add(d)
+                        label = f"[S] {d}"
+                        if d not in added:
+                            options.append(label); added.add(d)
 
-                    # 2) Altri sostegni presenti in quell'ora
+                    # 2) Altri sostegni presenti in quell'ora -> [S]
                     other_sost = presenti_ora_df[
                         (presenti_ora_df["Tipo"].str.lower() == "sostegno") &
                         (presenti_ora_df["Docente"] != assente)
                     ]["Docente"].unique().tolist()
                     for d in sorted(other_sost):
-                        if d in added:
+                        if d in added: 
                             continue
-                        label = pill_label(d, "sostegno")
-                        options.append(label); nome_per_label[label] = d; added.add(d)
+                        label = f"[S] {d}"
+                        options.append(label); added.add(d)
 
-                    # 3) Curricolari presenti in quell'ora
+                    # 3) Curricolari presenti in quell'ora -> [C]
                     curricolari_presenti = presenti_ora_df[
                         (presenti_ora_df["Tipo"].str.lower() != "sostegno") &
                         (presenti_ora_df["Docente"] != assente)
@@ -806,61 +666,65 @@ elif menu == "Gestione Assenze":
                     for d in sorted(curricolari_presenti):
                         if d in added:
                             continue
-                        label = pill_label(d, "curricolare")
-                        options.append(label); nome_per_label[label] = d; added.add(d)
+                        label = f"[C] {d}"
+                        options.append(label); added.add(d)
 
-                    # 4) Docenti che NON compaiono in quell'ora (NP, presumibilmente disponibili)
+                    # 4) Docenti che NON compaiono in quell'ora -> [S] [NP] o [C] [NP]
+                    # candidati NP: tutti i docenti presenti nell'orario generale MA non in 'presenti_ora', non assenti, non escludi
                     presenti_ora_set = set(presenti_ora)
                     np_candidates = [d for d in tutti_docenti if d not in presenti_ora_set and d != assente and d not in escludi_docenti]
 
-                    np_sost, np_curr = [], []
+                    # separo NP in S e C (in base al "Tipo" trovato nell'orario)
+                    np_sost = []
+                    np_curr = []
                     for d in np_candidates:
-                        (np_sost if tipo_docente(d).lower() == "sostegno" else np_curr).append(d)
+                        t = tipo_docente(d).lower()
+                        if t == "sostegno":
+                            np_sost.append(d)
+                        else:
+                            np_curr.append(d)
 
+                    # Aggiungo prima NP sostegni, poi NP curricolari
                     for d in sorted(np_sost):
                         if d in added:
                             continue
-                        label = pill_label(d, "sostegno", np=True)
-                        options.append(label); nome_per_label[label] = d; added.add(d)
+                        label = f"[S] [NP] {d}"
+                        options.append(label); added.add(d)
 
                     for d in sorted(np_curr):
                         if d in added:
                             continue
-                        label = pill_label(d, "curricolare", np=True)
-                        options.append(label); nome_per_label[label] = d; added.add(d)
+                        label = f"[C] [NP] {d}"
+                        options.append(label); added.add(d)
 
-                    # --- suggerimento automatico (stessa gerarchia di prima) ---
-                    proposto = None
-                    if same_class_sost:
-                        proposto = pill_label(sorted(same_class_sost)[0], "sostegno")
-                    elif other_sost:
-                        proposto = pill_label(sorted(other_sost)[0], "sostegno")
-                    elif curricolari_presenti:
-                        proposto = pill_label(sorted(curricolari_presenti)[0], "curricolare")
-                    elif np_sost:
-                        proposto = pill_label(sorted(np_sost)[0], "sostegno", np=True)
-                    elif np_curr:
-                        proposto = pill_label(sorted(np_curr)[0], "curricolare", np=True)
-                    if proposto not in options:
-                        proposto = "Nessuno"
+                    # Rimuovo eventuali docenti esclusi (già filtrati) e assente (già escluso)
+                    # --- suggerimento automatico (come prima gerarchia) ---
+                    proposto_display = "Nessuno"
+                    if len(same_class_sost) > 0:
+                        proposto_display = f"[S] {sorted(same_class_sost)[0]}"
+                    elif len(other_sost) > 0:
+                        proposto_display = f"[S] {sorted(other_sost)[0]}"
+                    elif len(curricolari_presenti) > 0:
+                        proposto_display = f"[C] {sorted(curricolari_presenti)[0]}"
+                    elif len(np_sost) > 0:
+                        proposto_display = f"[S] [NP] {sorted(np_sost)[0]}"
+                    elif len(np_curr) > 0:
+                        proposto_display = f"[C] [NP] {sorted(np_curr)[0]}"
 
-                    with st.container(border=True):
-                        st.markdown(f"**{ora} ora · classe {classe}**")
-                        st.caption(f"Assente: {assente}")
-                        scelta = st.pills(
-                            "Sostituto",
-                            options,
-                            selection_mode="single",
-                            default=proposto,
-                            label_visibility="collapsed",
-                            key=f"sost_{assente}_{ora}_{classe}"
-                        )
+                    default_index = options.index(proposto_display) if proposto_display in options else 0
 
-                    # con la pillola si può deselezionare: in quel caso equivale a "Nessuno"
-                    if scelta is None:
-                        scelta = "Nessuno"
+                    scelta = st.selectbox(
+                        f"Sostituto per {ora} ora - Classe {classe} (assente {assente})",
+                        options,
+                        index=default_index,
+                        key=f"sost_{assente}_{ora}_{classe}"
+                    )
 
-                    nome_pulito = nome_per_label.get(scelta, scelta)
+                    # pulisco il nome per lo storico (rimuovo prefissi tipo "[S] [NP] " ecc.)
+                    if scelta == "Nessuno":
+                        nome_pulito = "Nessuno"
+                    else:
+                        nome_pulito = scelta.replace("[S] [NP] ", "").replace("[C] [NP] ", "").replace("[S] ", "").replace("[C] ", "").strip()
 
                     sostituzioni.append({
                         "Ora": ora,
@@ -878,7 +742,7 @@ elif menu == "Gestione Assenze":
                     sostituzioni_df["Ora"] = pd.Categorical(sostituzioni_df["Ora"], categories=ordine_ore, ordered=True)
                     sostituzioni_df = sostituzioni_df.sort_values("Ora").reset_index(drop=True)
 
-                # --- VISTA TABELLA (mostra la label con 🟢/🟠/NP scelta nelle pillole) ---
+                # --- VISTA TABELLA (mostra la label con [S]/[C]/[NP]) ---
                 st.subheader("📋 Sostituzioni in tabella")
                 tabella_df = sostituzioni_df[["Ora", "Classe", "Assente", "Sostituto_display"]].copy()
                 tabella_df = tabella_df.rename(columns={"Sostituto_display": "Sostituzione"})
@@ -890,43 +754,38 @@ elif menu == "Gestione Assenze":
                         .set_table_styles([
                             {"selector": "th.col0", "props": [("width", "50px")]},
                             {"selector": "th.col1", "props": [("width", "80px")]},
-                            {"selector": "th", "props": [("background-color", "#F1DEC8"),
-                                                         ("color", "#3A2E1F"),
+                            {"selector": "th", "props": [("background-color", "#f0f0f0"),
                                                          ("font-weight", "bold"),
                                                          ("text-align", "center"),
-                                                         ("font-size", "16px"),
-                                                         ("border-bottom", "2px solid #C97D3D")]},
+                                                         ("font-size", "16px")]},
                             {"selector": "td", "props": [("text-align", "center"),
-                                                         ("color", "#3A2E1F"),
                                                          ("padding", "6px 12px"),
-                                                         ("font-size", "16px"),
-                                                         ("border-bottom", "1px solid rgba(58,46,31,0.12)")]}
+                                                         ("font-size", "16px")]}
                         ])
-                        .apply(lambda x: ['background-color: #F7F1E6' if i % 2 else 'background-color: white'
+                        .apply(lambda x: ['background-color: #f9f9f9' if i % 2 else 'background-color: white'
                                           for i in range(len(x))], axis=0)
                 )
                 html = styled_tabella.hide(axis="index").to_html()
                 st.markdown(html, unsafe_allow_html=True)
 
                 # --- VISTA TESTUALE ---
-                with st.container(border=True):
-                    st.subheader("📝 Sostituzioni in formato testo (mobile/copincolla)")
-                    testo_output = "Buongiorno, supplenze:\n\n"
+                st.subheader("📝 Sostituzioni in formato testo (mobile/copincolla)")
+                testo_output = "Buongiorno, supplenze:\n\n"
 
-                    # uso sostituzioni_df che ha sia display che nome pulito
-                    for ora, gruppo in sostituzioni_df.groupby("Ora"):
-                        if not gruppo.empty:
-                            testo_output += f"🕐 *{ora} ORA*\n"
-                            for _, r in gruppo.iterrows():
-                                sost_pulito = r['Sostituto'] if r['Sostituto'] not in ["Nessuno", "", "—"] else "—"
-                                testo_output += f"Classe {r['Classe']}\n"
-                                testo_output += f"👩‍🏫 Assente: {r['Assente']}\n"
-                                testo_output += f"✅ Sostituzione: {sost_pulito}\n\n"
+                # uso sostituzioni_df che ha sia display che nome pulito
+                for ora, gruppo in sostituzioni_df.groupby("Ora"):
+                    if not gruppo.empty:
+                        testo_output += f"🕐 *{ora} ORA*\n"
+                        for _, r in gruppo.iterrows():
+                            sost_pulito = r['Sostituto'] if r['Sostituto'] not in ["Nessuno", "", "—"] else "—"
+                            testo_output += f"Classe {r['Classe']}\n"
+                            testo_output += f"👩‍🏫 Assente: {r['Assente']}\n"
+                            testo_output += f"✅ Sostituzione: {sost_pulito}\n\n"
 
-                    st.text_area("Testo pronto da copiare", value=testo_output.strip(), height=300)
+                st.text_area("Testo pronto da copiare", value=testo_output.strip(), height=300)
 
                 # --- Step 1: conferma (controllo conflitti) ---
-                if st.button("✅ Conferma tabella (non salva ancora)", type="primary"):
+                if st.button("✅ Conferma tabella (non salva ancora)"):
                     check_df = sostituzioni_df.copy()
                     conflitti = []
                     conflitti_orario = []
@@ -974,7 +833,7 @@ elif menu == "Gestione Assenze":
 
                 # --- Step 2: Salva nello storico ---
                 if st.session_state.get("sostituzioni_confermate") is not None:
-                    if st.button("💾 Salva nello storico", key="save_storico_main", type="primary"):
+                    if st.button("💾 Salva nello storico", key="save_storico_main"):
                         sost_df = st.session_state.get("sostituzioni_confermate")
                         ore_assenti_session = st.session_state.get("ore_assenti_confermate")
                         data_tmp = st.session_state.get("data_sostituzione_tmp")
@@ -1019,13 +878,6 @@ elif menu == "Statistiche":
         df_sum = df_storico.groupby("docente")["ore"].sum().reset_index()
         df_sum = df_sum.rename(columns={"ore": "Totale Ore Sostituite"})
 
-        # Card riassuntive
-        docente_top = df_sum.sort_values("Totale Ore Sostituite", ascending=False).iloc[0]
-        col_a, col_b, col_c = st.columns(3)
-        col_a.metric("Ore totali sostituite", int(df_sum["Totale Ore Sostituite"].sum()))
-        col_b.metric("Docente più impegnato", docente_top["docente"], f"{int(docente_top['Totale Ore Sostituite'])} ore")
-        col_c.metric("Docenti coinvolti", df_sum["docente"].nunique())
-
         # Mostra la tabella con i dati aggregati
         st.dataframe(df_sum, use_container_width=True, hide_index=True)
 
@@ -1046,14 +898,8 @@ elif menu == "Statistiche":
     if df_assenze.empty:
         st.info("Nessuna assenza registrata.")
     else:
-        df_assenze_agg = df_assenze.groupby("docente")["ora"].count().reset_index().rename(columns={"ora": "Totale Ore Assenti"})
-        docente_top_assenze = df_assenze_agg.sort_values("Totale Ore Assenti", ascending=False).iloc[0]
-
-        col_a, col_b = st.columns(2)
-        col_a.metric("Ore di assenza totali", len(df_assenze))
-        col_b.metric("Docente più assente", docente_top_assenze["docente"], f"{int(docente_top_assenze['Totale Ore Assenti'])} ore")
-
         st.dataframe(df_assenze, use_container_width=True, hide_index=True)
+        df_assenze_agg = df_assenze.groupby("docente")["ora"].count().reset_index().rename(columns={"ora": "Totale Ore Assenti"})
         st.bar_chart(df_assenze_agg.set_index("docente"))
 
     st.subheader("⚠️ Azzeramento storico assenze")
