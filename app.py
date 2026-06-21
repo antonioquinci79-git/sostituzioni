@@ -3,6 +3,7 @@ import pandas as pd
 import os
 import re
 import io
+import json
 import zipfile
 import gspread
 import gspread_dataframe as gd
@@ -12,14 +13,17 @@ from datetime import datetime
 # =========================
 # STILI PERSONALIZZATI
 # =========================
+# Nota: i colori, il raggio degli angoli e i font sono ora gestiti dal tema
+# nativo in .streamlit/config.toml (Direzione A "Diario di classe"). Qui resta
+# solo ciò che il tema non gestisce: misure per il tocco su mobile e un
+# piccolo tocco decorativo sui titoli.
 st.markdown("""
 <style>
-/* Bottoni più grandi */
+/* Bottoni più grandi (comodi da toccare su mobile) */
 .stButton button {
     width: 100%;
     padding: 0.8em;
     font-size: 1.05em;
-    border-radius: 12px;
 }
 
 /* Tabelle: font più piccolo e leggibile */
@@ -38,13 +42,10 @@ st.markdown("""
     padding-right: 1rem;
 }
 
-/* Pills: dimensione tocco comoda su mobile */
-[data-testid="stPills"] button {
-    font-size: 1em !important;
-    padding: 0.5em 0.9em !important;
-    border-radius: 20px !important;
-    margin: 3px !important;
-    min-height: 2.4em !important;
+/* Tocco "diario di classe": una sottile riga sotto i titoli di sezione */
+h1, h2 {
+    border-bottom: 1px solid #E3D9C2;
+    padding-bottom: 0.3em;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -290,7 +291,7 @@ def archivia_anno_scolastico(anno: str):
             # Crea foglio archivio e scrivi dati
             ws_dest = sh.add_worksheet(title=nome_dest, rows=max(len(dati) + 10, 50), cols=10)
             if dati:
-                ws_dest.update(dati, value_input_option="USER_ENTERED")
+                ws_dest.update(values=dati, value_input_option="USER_ENTERED")
 
         # Svuota i fogli attivi
         clear_sheet_content(STORICO_SHEET)
@@ -386,9 +387,9 @@ def vista_pivot_docenti(df, mode="docenti"):
         def color_cells(val):
             text = str(val)
             if "[S]" in text:
-                return "color: green; font-weight: bold;"
+                return "color: #3B6D11; font-weight: bold;"
             elif text.strip() != "":
-                return "color: blue;"
+                return "color: #9C5F2C;"
             return ""
 
         styled = pivot.style.map(color_cells)
@@ -443,7 +444,7 @@ def vista_pivot_docenti(df, mode="docenti"):
 # =========================
 # AVVIO APP
 # =========================
-st.title("📚Sostituzioni docenti")
+st.title("📚 Sostituzioni docenti")
 # assicurati che i fogli esistano con le intestazioni
 try:
     with st.spinner('Caricamento dati...'):
@@ -518,7 +519,7 @@ if menu == "Inserisci/Modifica Orario":
             classe = st.text_input("Inserisci nuova classe")
         tipo = st.selectbox("Tipo", TIPI_LEZIONE)
         escludi = st.checkbox("Escludi da sostituzioni")
-        if st.button("Aggiungi", key="add_lesson"):
+        if st.button("Aggiungi", key="add_lesson", type="primary"):
             if docente and giorno and ora and classe and tipo:
                 row = {
                     "Docente": docente,
@@ -564,7 +565,7 @@ if menu == "Inserisci/Modifica Orario":
                 "Classe": st.column_config.TextColumn("Classe", required=True),
             }
         )
-        if st.button("Salva modifiche"):
+        if st.button("Salva modifiche", type="primary"):
             df_da_salvare = edited_df.copy()
             for col in ["Docente", "Giorno", "Ora", "Classe", "Tipo"]:
                 df_da_salvare[col] = df_da_salvare[col].astype(str).str.strip()
@@ -876,15 +877,19 @@ elif menu == "Gestione Assenze":
                         .set_table_styles([
                             {"selector": "th.col0", "props": [("width", "50px")]},
                             {"selector": "th.col1", "props": [("width", "80px")]},
-                            {"selector": "th", "props": [("background-color", "#f0f0f0"),
+                            {"selector": "th", "props": [("background-color", "#EFE6D3"),
+                                                         ("color", "#3A2E1F"),
                                                          ("font-weight", "bold"),
                                                          ("text-align", "center"),
-                                                         ("font-size", "16px")]},
+                                                         ("font-size", "16px"),
+                                                         ("border-bottom", "1px solid #E3D9C2")]},
                             {"selector": "td", "props": [("text-align", "center"),
                                                          ("padding", "6px 12px"),
-                                                         ("font-size", "16px")]}
+                                                         ("font-size", "16px"),
+                                                         ("color", "#3A2E1F"),
+                                                         ("border-bottom", "1px solid #E3D9C2")]}
                         ])
-                        .apply(lambda x: ['background-color: #f9f9f9' if i % 2 else 'background-color: white'
+                        .apply(lambda x: ['background-color: #FBF4E6' if i % 2 else 'background-color: #FFFFFF'
                                           for i in range(len(x))], axis=0)
                 )
                 html = styled_tabella.hide(axis="index").to_html()
@@ -906,19 +911,27 @@ elif menu == "Gestione Assenze":
 
                 testo_strip = testo_output.strip()
                 st.text_area("Testo pronto da copiare", value=testo_strip, height=300)
-                # Bottone "Copia negli appunti" via JavaScript
-                testo_js = testo_strip.replace("\\", "\\\\").replace("`", "\\`").replace("$", "\\$")
+                # Bottone "Copia negli appunti" via JavaScript.
+                # json.dumps si occupa di tutto l'escaping (virgolette, backslash, a capo),
+                # evitando i replace manuali che non coprivano le virgolette doppie.
+                testo_json = json.dumps(testo_strip)
                 st.components.v1.html(f"""
-<button onclick="navigator.clipboard.writeText(`{testo_js}`).then(()=>{{
-    this.innerText='✅ Copiato!'; setTimeout(()=>this.innerText='📋 Copia negli appunti', 2000);
-}})" style="
+<button id="copia-sostituzioni-btn" style="
     width:100%; padding:0.7em; font-size:1em; font-weight:bold;
-    background:#0068c9; color:white; border:none; border-radius:10px; cursor:pointer;
+    background:#C97D3D; color:white; border:none; border-radius:10px; cursor:pointer;
 ">📋 Copia negli appunti</button>
+<script>
+document.getElementById('copia-sostituzioni-btn').addEventListener('click', function() {{
+    navigator.clipboard.writeText({testo_json}).then(() => {{
+        this.innerText = '✅ Copiato!';
+        setTimeout(() => {{ this.innerText = '📋 Copia negli appunti'; }}, 2000);
+    }});
+}});
+</script>
 """, height=55)
 
                 # --- Step 1: conferma (controllo conflitti) ---
-                if st.button("✅ Conferma tabella (non salva ancora)"):
+                if st.button("✅ Conferma tabella (non salva ancora)", type="primary"):
                     check_df = sostituzioni_df.copy()
                     conflitti = []
                     conflitti_orario = []
@@ -971,7 +984,7 @@ elif menu == "Gestione Assenze":
 
                 # --- Step 2: Salva nello storico ---
                 if st.session_state.get("sostituzioni_confermate") is not None:
-                    if st.button("💾 Salva nello storico", key="save_storico_main"):
+                    if st.button("💾 Salva nello storico", key="save_storico_main", type="primary"):
                         sost_df = st.session_state.get("sostituzioni_confermate")
                         ore_assenti_session = st.session_state.get("ore_assenti_confermate")
                         data_tmp = st.session_state.get("data_sostituzione_tmp")
@@ -1028,6 +1041,50 @@ elif menu == "Statistiche":
     with st.spinner('Caricamento statistiche...'):
         df_storico, df_assenze = carica_statistiche()
 
+    # --- Filtro per intervallo di date (si applica sia a sostituzioni che ad
+    # assenze qui sotto; non influisce sull'archiviazione o la cancellazione,
+    # che restano operazioni sui dati completi) ---
+    date_storico = pd.to_datetime(df_storico["data"], errors="coerce") if "data" in df_storico.columns else pd.Series([], dtype="datetime64[ns]")
+    date_assenze = pd.to_datetime(df_assenze["data"], errors="coerce") if "data" in df_assenze.columns else pd.Series([], dtype="datetime64[ns]")
+    tutte_le_date = pd.concat([date_storico, date_assenze]).dropna()
+
+    if tutte_le_date.empty:
+        data_min_default = data_max_default = datetime.now().date()
+    else:
+        data_min_default = tutte_le_date.min().date()
+        data_max_default = tutte_le_date.max().date()
+
+    intervallo = st.date_input(
+        "📅 Filtra per intervallo di date",
+        value=(data_min_default, data_max_default),
+        min_value=data_min_default,
+        max_value=data_max_default,
+        key="statistiche_intervallo_date",
+        help="Filtra le statistiche qui sotto (sostituzioni e assenze) per periodo. "
+             "Non cancella né archivia nulla: agisce solo su questa schermata."
+    )
+    if isinstance(intervallo, tuple) and len(intervallo) == 2:
+        data_inizio, data_fine = intervallo
+    elif isinstance(intervallo, tuple) and len(intervallo) == 1:
+        # l'utente ha selezionato solo la data di inizio: aspetto la fine,
+        # nel frattempo mostro solo quel giorno
+        data_inizio = data_fine = intervallo[0]
+    else:
+        data_inizio = data_fine = intervallo
+
+    if not df_storico.empty:
+        df_storico = df_storico[
+            pd.to_datetime(df_storico["data"], errors="coerce").between(
+                pd.Timestamp(data_inizio), pd.Timestamp(data_fine)
+            )
+        ].copy()
+    if not df_assenze.empty:
+        df_assenze = df_assenze[
+            pd.to_datetime(df_assenze["data"], errors="coerce").between(
+                pd.Timestamp(data_inizio), pd.Timestamp(data_fine)
+            )
+        ].copy()
+
     def render_cards(titolo, righe, colore):
         """Renderizza un blocco card colorato con titolo e lista di (nome, valore)."""
         medaglie = ["🥇", "🥈", "🥉"]
@@ -1047,7 +1104,10 @@ elif menu == "Statistiche":
 </div>""", unsafe_allow_html=True)
 
     if df_storico.empty:
-        st.info("Nessuna statistica disponibile. Registra prima delle sostituzioni.")
+        if tutte_le_date.empty:
+            st.info("Nessuna statistica disponibile. Registra prima delle sostituzioni.")
+        else:
+            st.info("Nessuna sostituzione registrata nell'intervallo di date selezionato.")
     else:
         df_sum = df_storico.groupby("docente")["ore"].sum().reset_index()
         df_sum = df_sum.rename(columns={"ore": "Totale Ore Sostituite"})
@@ -1074,9 +1134,9 @@ elif menu == "Statistiche":
 
         col_top, col_bot = st.columns(2)
         with col_top:
-            render_cards("🟢 Più sostituzioni", top3, "#2e7d32")
+            render_cards("🟢 Più sostituzioni", top3, "#6B8F71")
         with col_bot:
-            render_cards("🟠 Meno sostituzioni [S]", bot3, "#e65100")
+            render_cards("🟠 Meno sostituzioni [S]", bot3, "#C9933D")
 
         st.dataframe(df_sorted, use_container_width=True, hide_index=True)
         st.bar_chart(df_sorted.set_index("docente"))
@@ -1093,7 +1153,10 @@ elif menu == "Statistiche":
     # STATISTICHE ASSENZE
     st.header("📊 Statistiche Assenze")
     if df_assenze.empty:
-        st.info("Nessuna assenza registrata.")
+        if tutte_le_date.empty:
+            st.info("Nessuna assenza registrata.")
+        else:
+            st.info("Nessuna assenza registrata nell'intervallo di date selezionato.")
     else:
         # Ore totali per docente
         df_ore = df_assenze.groupby("docente")["ora"].count().reset_index().rename(columns={"ora": "Totale Ore Assenti"})
@@ -1116,7 +1179,7 @@ elif menu == "Statistiche":
     </span>
   </div>"""
         st.markdown(f"""
-<div style="background:#e65100;border-radius:14px;padding:16px 20px;color:white;margin-bottom:16px;">
+<div style="background:#C9933D;border-radius:14px;padding:16px 20px;color:white;margin-bottom:16px;">
   <div style="font-size:0.85em;font-weight:600;opacity:0.85;margin-bottom:6px;">🟠 Più assenze</div>
   {items_html}
 </div>""", unsafe_allow_html=True)
