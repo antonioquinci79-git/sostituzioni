@@ -97,9 +97,16 @@ def mostra_login():
 
     if st.button("Accedi", type="primary"):
         chiave = PLESSI_CONFIG[plesso_label]           # es. "centrale"
-        cfg    = st.secrets.get("plessi", {}).get(chiave, {})
-        pwd_corretta = cfg.get("password", "")
-        spreadsheet  = cfg.get("spreadsheet", f"OrarioSostituzioni_{chiave.capitalize()}")
+        try:
+            pwd_corretta = st.secrets["plessi"][chiave]["password"]
+            spreadsheet  = st.secrets["plessi"][chiave]["spreadsheet"]
+        except KeyError:
+            st.error(
+                f"Configurazione mancante in secrets.toml per il plesso '{chiave}'. "
+                "Verifica che la sezione [plessi.{chiave}] esista e contenga "
+                "'password' e 'spreadsheet'."
+            )
+            st.stop()
 
         if password == pwd_corretta:
             st.session_state["plesso_autenticato"]    = True
