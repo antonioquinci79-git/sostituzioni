@@ -78,6 +78,7 @@ PLESSI_CONFIG = {
 # =========================
 # SCHERMATA DI LOGIN
 # =========================
+
 def mostra_login():
     """Mostra la schermata di selezione plesso + password.
     Ritorna True se l'utente è già autenticato, False altrimenti."""
@@ -94,7 +95,7 @@ def mostra_login():
 
     plesso_label = st.selectbox("Seleziona il plesso", list(PLESSI_CONFIG.keys()))
     password = st.text_input("Password", type="password", placeholder="Inserisci la password del plesso")
-
+    st.write(dict(st.secrets))
     if st.button("Accedi", type="primary"):
         chiave = PLESSI_CONFIG[plesso_label]           # es. "centrale"
         try:
