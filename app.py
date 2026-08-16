@@ -13,39 +13,56 @@ from datetime import datetime
 # =========================
 # STILI PERSONALIZZATI
 # =========================
-# Nota: i colori, il raggio degli angoli e i font sono ora gestiti dal tema
-# nativo in .streamlit/config.toml (Direzione A "Diario di classe"). Qui resta
-# solo ciò che il tema non gestisce: misure per il tocco su mobile e un
-# piccolo tocco decorativo sui titoli.
+# Il config.toml gestisce: colori, sfondo, font corpo (Inter), raggio angoli,
+# colore primario (terracotta), dataframe headers.
+# Qui gestiamo solo ciò che il tema nativo non raggiunge.
 st.markdown("""
 <style>
-/* Bottoni più grandi (comodi da toccare su mobile) */
+/* Titoli: serif per il tocco "diario scolastico" */
+h1, h2, h3 {
+    font-family: 'Georgia', 'Times New Roman', serif !important;
+    border-bottom: 1px solid #E3D9C2;
+    padding-bottom: 0.3em;
+}
+
+/* Bottoni: larghezza piena e padding comodo su mobile */
 .stButton button {
     width: 100%;
     padding: 0.8em;
     font-size: 1.05em;
 }
 
-/* Tabelle: font più piccolo e leggibile */
+/* Tabelle: leggibilità su schermi piccoli */
 .stDataFrame, .stDataEditor {
     font-size: 0.9em !important;
 }
 
-/* Input: allarga i selectbox */
+/* Input: larghezza piena */
 .stSelectbox, .stTextInput, .stDateInput, .stMultiSelect {
     width: 100% !important;
 }
 
-/* Margini orizzontali per respirare su mobile */
+/* Margini laterali per respirare su mobile */
 .block-container {
     padding-left: 1rem;
     padding-right: 1rem;
+    max-width: 860px;
 }
 
-/* Tocco "diario di classe": una sottile riga sotto i titoli di sezione */
-h1, h2 {
-    border-bottom: 1px solid #E3D9C2;
-    padding-bottom: 0.3em;
+/* Segmented control: testo più leggibile su mobile */
+[data-testid="stSegmentedControl"] button {
+    font-size: 0.88em !important;
+    padding: 0.4em 0.7em !important;
+}
+
+/* Schermata login: centra il form */
+.login-box {
+    max-width: 380px;
+    margin: 2rem auto;
+    background: #FFFFFF;
+    border: 0.5px solid #E3D9C2;
+    border-radius: 16px;
+    padding: 2rem 1.75rem;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -78,46 +95,46 @@ PLESSI_CONFIG = {
 # =========================
 # SCHERMATA DI LOGIN
 # =========================
-
 def mostra_login():
-    """Mostra la schermata di selezione plesso + password.
-    Ritorna True se l'utente è già autenticato, False altrimenti."""
-
     if st.session_state.get("plesso_autenticato"):
         return True
 
-    st.markdown("""
-    <div style="max-width:400px;margin:3rem auto 0;">
-    """, unsafe_allow_html=True)
+    st.markdown('<div class="login-box">', unsafe_allow_html=True)
+    st.markdown(
+        "<h1 style='text-align:center; font-size:1.6em; border:none; margin-bottom:0.1em;'>📚 Sostituzioni</h1>"
+        "<p style='text-align:center; color:#5C4A2C; font-size:0.92em; margin-bottom:1.5rem;'>"
+        "Gestione sostituzioni docenti</p>",
+        unsafe_allow_html=True
+    )
 
-    st.title("📚 Sostituzioni docenti")
-    st.subheader("Accesso")
+    # ⚠️ DEBUG TEMPORANEO — rimuovere dopo verifica
+    st.write(dict(st.secrets))
 
     plesso_label = st.selectbox("Seleziona il plesso", list(PLESSI_CONFIG.keys()))
-    password = st.text_input("Password", type="password", placeholder="Inserisci la password del plesso")
-    st.write(dict(st.secrets))
+    password = st.text_input("Password", type="password", placeholder="Password del plesso")
+
     if st.button("Accedi", type="primary"):
-        chiave = PLESSI_CONFIG[plesso_label]           # es. "centrale"
+        chiave = PLESSI_CONFIG[plesso_label]
         try:
             pwd_corretta = st.secrets["plessi"][chiave]["password"]
             spreadsheet  = st.secrets["plessi"][chiave]["spreadsheet"]
         except KeyError:
             st.error(
                 f"Configurazione mancante in secrets.toml per il plesso '{chiave}'. "
-                "Verifica che la sezione [plessi.{chiave}] esista e contenga "
+                f"Verifica che la sezione [plessi.{chiave}] esista e contenga "
                 "'password' e 'spreadsheet'."
             )
             st.stop()
 
         if password == pwd_corretta:
-            st.session_state["plesso_autenticato"]    = True
-            st.session_state["plesso_label"]          = plesso_label
-            st.session_state["plesso_spreadsheet"]    = spreadsheet
+            st.session_state["plesso_autenticato"] = True
+            st.session_state["plesso_label"]       = plesso_label
+            st.session_state["plesso_spreadsheet"] = spreadsheet
             st.rerun()
         else:
             st.error("Password errata. Riprova.")
 
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
     return False
 
 if not mostra_login():
