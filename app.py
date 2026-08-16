@@ -51,16 +51,73 @@ h1, h2 {
 """, unsafe_allow_html=True)
 
 # =========================
-# CONFIGURAZIONE FILE / SHEETS
+# CONFIGURAZIONE PLESSI
 # =========================
 REQUIRED_COLUMNS = ["Docente", "Giorno", "Ora", "Classe", "Tipo", "Escludi"]
-SPREADSHEET_NAME = "OrarioSostituzioni"
-ORARIO_SHEET = "orario"
-STORICO_SHEET = "storico"
-ASSENZE_SHEET = "assenze"
+ORARIO_SHEET   = "orario"
+STORICO_SHEET  = "storico"
+ASSENZE_SHEET  = "assenze"
 GIORNI_SETTIMANA = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì"]
-ORE_LEZIONE = ["I", "II", "III", "IV", "V", "VI"]
-TIPI_LEZIONE = ["Lezione", "Sostegno", "Altro"]
+ORE_LEZIONE    = ["I", "II", "III", "IV", "V", "VI"]
+TIPI_LEZIONE   = ["Lezione", "Sostegno", "Altro"]
+
+# Ogni plesso ha un nome visualizzato, uno spreadsheet Google dedicato
+# e una password (letta da st.secrets per non esporla nel codice).
+# Struttura attesa in secrets.toml:
+#   [plessi.centrale]
+#   spreadsheet = "OrarioSostituzioni_Centrale"
+#   password    = "segreto_centrale"
+#   [plessi.castaldi]
+#   spreadsheet = "OrarioSostituzioni_Castaldi"
+#   password    = "segreto_castaldi"
+PLESSI_CONFIG = {
+    "Plesso Centrale": "centrale",
+    "Plesso Castaldi": "castaldi",
+}
+
+# =========================
+# SCHERMATA DI LOGIN
+# =========================
+def mostra_login():
+    """Mostra la schermata di selezione plesso + password.
+    Ritorna True se l'utente è già autenticato, False altrimenti."""
+
+    if st.session_state.get("plesso_autenticato"):
+        return True
+
+    st.markdown("""
+    <div style="max-width:400px;margin:3rem auto 0;">
+    """, unsafe_allow_html=True)
+
+    st.title("📚 Sostituzioni docenti")
+    st.subheader("Accesso")
+
+    plesso_label = st.selectbox("Seleziona il plesso", list(PLESSI_CONFIG.keys()))
+    password = st.text_input("Password", type="password", placeholder="Inserisci la password del plesso")
+
+    if st.button("Accedi", type="primary"):
+        chiave = PLESSI_CONFIG[plesso_label]           # es. "centrale"
+        cfg    = st.secrets.get("plessi", {}).get(chiave, {})
+        pwd_corretta = cfg.get("password", "")
+        spreadsheet  = cfg.get("spreadsheet", f"OrarioSostituzioni_{chiave.capitalize()}")
+
+        if password == pwd_corretta:
+            st.session_state["plesso_autenticato"]    = True
+            st.session_state["plesso_label"]          = plesso_label
+            st.session_state["plesso_spreadsheet"]    = spreadsheet
+            st.rerun()
+        else:
+            st.error("Password errata. Riprova.")
+
+    st.markdown("</div>", unsafe_allow_html=True)
+    return False
+
+if not mostra_login():
+    st.stop()   # blocca il resto dell'app finché non si è autenticati
+
+# --- Da qui in poi l'utente è autenticato ---
+SPREADSHEET_NAME = st.session_state["plesso_spreadsheet"]
+PLESSO_LABEL     = st.session_state["plesso_label"]
 
 # =========================
 # CLIENT GOOGLE DRIVE
@@ -79,29 +136,25 @@ def get_gdrive_client():
     return client
 
 @st.cache_resource(show_spinner=False)
-def get_spreadsheet():
-    """Apre (o crea) lo spreadsheet UNA SOLA VOLTA per la vita dell'app
-    (cache_resource), invece di rifare la ricerca per nome ad ogni rerun."""
+def get_spreadsheet(spreadsheet_name: str):
+    """Apre (o crea) lo spreadsheet per il plesso indicato.
+    Il parametro spreadsheet_name garantisce cache separate per ogni plesso."""
     client = get_gdrive_client()
     try:
-        return client.open(SPREADSHEET_NAME)
+        return client.open(spreadsheet_name)
     except gspread.SpreadsheetNotFound:
-        # Creazione: l'utente dovrà eventualmente condividere il foglio
-        # con l'email del service account se vuole accedervi anche da browser.
-        return client.create(SPREADSHEET_NAME)
+        return client.create(spreadsheet_name)
 
 @st.cache_resource(show_spinner=False)
-def get_worksheet(sheet_name: str):
-    """Restituisce l'handle del worksheet, creandolo con l'header corretto
-    se non esiste. Cachato: una volta risolto l'handle, i rerun successivi
-    non fanno più alcuna chiamata 'metadata' a Google, solo letture/scritture
-    sui valori quando effettivamente richieste."""
+def get_worksheet(spreadsheet_name: str, sheet_name: str):
+    """Restituisce l'handle del worksheet per il plesso + foglio indicati.
+    Cache separata per ogni combinazione (plesso, foglio)."""
     headers_by_sheet = {
-        ORARIO_SHEET: REQUIRED_COLUMNS,
+        ORARIO_SHEET:  REQUIRED_COLUMNS,
         STORICO_SHEET: ["data", "giorno", "docente", "ore"],
         ASSENZE_SHEET: ["data", "giorno", "docente", "ora", "classe"],
     }
-    sh = get_spreadsheet()
+    sh = get_spreadsheet(spreadsheet_name)
     try:
         return sh.worksheet(sheet_name)
     except gspread.WorksheetNotFound:
@@ -114,19 +167,16 @@ def get_worksheet(sheet_name: str):
 # INIZIALIZZAZIONE FOGLI (se mancanti creali con header corretti)
 # =========================
 def ensure_sheets_exist():
-    """Pre-carica gli handle dei worksheet. Grazie al cache_resource su
-    get_worksheet, dal secondo rerun in poi questa funzione non genera
-    alcuna chiamata di rete."""
     for nome_foglio in (ORARIO_SHEET, STORICO_SHEET, ASSENZE_SHEET):
-        get_worksheet(nome_foglio)
+        get_worksheet(SPREADSHEET_NAME, nome_foglio)
 
 # =========================
 # CARICAMENTO / SALVATAGGIO ORARIO
 # =========================
 @st.cache_data(ttl=300, show_spinner=False)
-def carica_orario():
+def carica_orario(spreadsheet_name: str):
     try:
-        ws = get_worksheet(ORARIO_SHEET)
+        ws = get_worksheet(spreadsheet_name, ORARIO_SHEET)
         df = gd.get_as_dataframe(ws, evaluate_formulas=True, header=0)
         # rimuovo colonne totalmente vuote
         df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
@@ -153,15 +203,14 @@ def carica_orario():
 
 def salva_orario(df):
     try:
-        ws = get_worksheet(ORARIO_SHEET)
-        # assicurati che le colonne siano quelle giuste e in ordine
+        ws = get_worksheet(SPREADSHEET_NAME, ORARIO_SHEET)
         df_to_save = df.copy()
         for col in REQUIRED_COLUMNS:
             if col not in df_to_save.columns:
                 df_to_save[col] = ""
         df_to_save = df_to_save[REQUIRED_COLUMNS]
         gd.set_with_dataframe(ws, df_to_save, include_index=False, include_column_header=True)
-        carica_orario.clear()  # invalida la cache: i dati appena salvati saranno subito visibili
+        carica_orario.clear()
         return True
     except Exception as e:
         st.error(f"Errore nel salvataggio dell'orario su Google Sheets: {e}")
@@ -171,10 +220,10 @@ def salva_orario(df):
 # CARICAMENTO / SALVATAGGIO STATISTICHE (storico + assenze)
 # =========================
 @st.cache_data(ttl=300, show_spinner=False)
-def carica_statistiche():
+def carica_statistiche(spreadsheet_name: str):
     try:
-        ws_storico = get_worksheet(STORICO_SHEET)
-        ws_assenze = get_worksheet(ASSENZE_SHEET)
+        ws_storico = get_worksheet(spreadsheet_name, STORICO_SHEET)
+        ws_assenze = get_worksheet(spreadsheet_name, ASSENZE_SHEET)
         df_storico = gd.get_as_dataframe(ws_storico, header=0).dropna(how='all')
         df_assenze = gd.get_as_dataframe(ws_assenze, header=0).dropna(how='all')
         # Normalizza nomi e tipi
@@ -209,8 +258,8 @@ def carica_statistiche():
 
 def salva_storico_assenze(data_sostituzione, giorno_assente, sostituzioni_df, ore_assenti):
     try:
-        ws_storico = get_worksheet(STORICO_SHEET)
-        ws_assenze = get_worksheet(ASSENZE_SHEET)
+        ws_storico = get_worksheet(SPREADSHEET_NAME, STORICO_SHEET)
+        ws_assenze = get_worksheet(SPREADSHEET_NAME, ASSENZE_SHEET)
 
         # Filtra solo le sostituzioni effettive (esclude "Nessuno")
         sostituzioni_effettive = sostituzioni_df[
@@ -249,7 +298,7 @@ def salva_storico_assenze(data_sostituzione, giorno_assente, sostituzioni_df, or
 
 def clear_sheet_content(sheet_name):
     try:
-        ws = get_worksheet(sheet_name)
+        ws = get_worksheet(SPREADSHEET_NAME, sheet_name)
         ws.clear()
         if sheet_name == STORICO_SHEET:
             ws.append_row(["data", "giorno", "docente", "ore"])
@@ -265,35 +314,25 @@ def clear_sheet_content(sheet_name):
         return False
 
 def archivia_anno_scolastico(anno: str):
-    """Copia storico e assenze in fogli archivio_storico_ANNO e archivio_assenze_ANNO,
-    poi svuota i fogli attivi pronti per il nuovo anno."""
     try:
-        sh = get_spreadsheet()
+        sh = get_spreadsheet(SPREADSHEET_NAME)
         suffisso = anno.replace("/", "-")
         nomi_archivio = {
             STORICO_SHEET: f"archivio_storico_{suffisso}",
             ASSENZE_SHEET: f"archivio_assenze_{suffisso}",
         }
-
         for sheet_src, nome_dest in nomi_archivio.items():
-            # Controlla che il foglio archivio non esista già
             try:
                 sh.worksheet(nome_dest)
                 st.error(f"Esiste già un archivio per l'anno {anno} ({nome_dest}). Scegli un anno diverso.")
                 return False
             except gspread.WorksheetNotFound:
                 pass
-
-            # Leggi dati attivi
-            ws_src = get_worksheet(sheet_src)
-            dati = ws_src.get_all_values()  # lista di liste inclusa intestazione
-
-            # Crea foglio archivio e scrivi dati
+            ws_src = get_worksheet(SPREADSHEET_NAME, sheet_src)
+            dati = ws_src.get_all_values()
             ws_dest = sh.add_worksheet(title=nome_dest, rows=max(len(dati) + 10, 50), cols=10)
             if dati:
                 ws_dest.update(values=dati, value_input_option="USER_ENTERED")
-
-        # Svuota i fogli attivi
         clear_sheet_content(STORICO_SHEET)
         clear_sheet_content(ASSENZE_SHEET)
         carica_statistiche.clear()
@@ -307,19 +346,12 @@ def archivia_anno_scolastico(anno: str):
 # =========================
 def create_backup():
     try:
-        # Esporta il foglio "orario" in CSV
-        ws_orario = get_worksheet(ORARIO_SHEET)
-        df_orario = gd.get_as_dataframe(ws_orario, evaluate_formulas=True, header=0).dropna(how='all')
-
-        # Esporta il foglio "storico" in CSV
-        ws_storico = get_worksheet(STORICO_SHEET)
+        ws_orario  = get_worksheet(SPREADSHEET_NAME, ORARIO_SHEET)
+        ws_storico = get_worksheet(SPREADSHEET_NAME, STORICO_SHEET)
+        ws_assenze = get_worksheet(SPREADSHEET_NAME, ASSENZE_SHEET)
+        df_orario  = gd.get_as_dataframe(ws_orario,  evaluate_formulas=True, header=0).dropna(how='all')
         df_storico = gd.get_as_dataframe(ws_storico, evaluate_formulas=True, header=0).dropna(how='all')
-
-        # Esporta il foglio "assenze" in CSV
-        ws_assenze = get_worksheet(ASSENZE_SHEET)
         df_assenze = gd.get_as_dataframe(ws_assenze, evaluate_formulas=True, header=0).dropna(how='all')
-
-        # Comprimi i DataFrame in un file ZIP in memoria
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
             # Aggiungi i file CSV al buffer
@@ -444,8 +476,16 @@ def vista_pivot_docenti(df, mode="docenti"):
 # =========================
 # AVVIO APP
 # =========================
-st.title("📚 Sostituzioni docenti")
-# assicurati che i fogli esistano con le intestazioni
+col_titolo, col_logout = st.columns([5, 1])
+with col_titolo:
+    st.title(f"📚 Sostituzioni — {PLESSO_LABEL}")
+with col_logout:
+    st.write("")  # spaziatura verticale
+    if st.button("🚪 Esci", help="Torna alla schermata di selezione plesso"):
+        for k in ["plesso_autenticato", "plesso_label", "plesso_spreadsheet"]:
+            st.session_state.pop(k, None)
+        st.rerun()
+
 try:
     with st.spinner('Caricamento dati...'):
         ensure_sheets_exist()
@@ -453,7 +493,7 @@ except Exception as e:
     st.error(f"Impossibile inizializzare i fogli Google: {e}")
 
 with st.spinner('Caricamento orario...'):
-    orario_df = carica_orario()
+    orario_df = carica_orario(SPREADSHEET_NAME)
 
 # =========================
 # MENU PRINCIPALE (mobile-friendly)
@@ -1039,7 +1079,7 @@ elif menu == "Visualizza Orario":
 elif menu == "Statistiche":
     st.header("📊 Statistiche Sostituzioni")
     with st.spinner('Caricamento statistiche...'):
-        df_storico, df_assenze = carica_statistiche()
+        df_storico, df_assenze = carica_statistiche(SPREADSHEET_NAME)
 
     # --- Filtro per intervallo di date (si applica sia a sostituzioni che ad
     # assenze qui sotto; non influisce sull'archiviazione o la cancellazione,
