@@ -107,22 +107,19 @@ def mostra_login():
         unsafe_allow_html=True
     )
 
-    # ⚠️ DEBUG TEMPORANEO — rimuovere dopo verifica
-    st.write(dict(st.secrets))
-
     plesso_label = st.selectbox("Seleziona il plesso", list(PLESSI_CONFIG.keys()))
     password = st.text_input("Password", type="password", placeholder="Password del plesso")
 
     if st.button("Accedi", type="primary"):
-        chiave = PLESSI_CONFIG[plesso_label]
+        chiave = PLESSI_CONFIG[plesso_label]   # "centrale" o "castaldi"
         try:
-            pwd_corretta = st.secrets["plessi"][chiave]["password"]
-            spreadsheet  = st.secrets["plessi"][chiave]["spreadsheet"]
+            pwd_corretta = st.secrets[f"plesso_{chiave}_password"]
+            spreadsheet  = st.secrets[f"plesso_{chiave}_spreadsheet"]
         except KeyError:
             st.error(
-                f"Configurazione mancante in secrets.toml per il plesso '{chiave}'. "
-                f"Verifica che la sezione [plessi.{chiave}] esista e contenga "
-                "'password' e 'spreadsheet'."
+                f"Chiave mancante nei secrets per il plesso '{chiave}'. "
+                f"Assicurati di avere 'plesso_{chiave}_password' e "
+                f"'plesso_{chiave}_spreadsheet' nei secrets di Streamlit."
             )
             st.stop()
 
