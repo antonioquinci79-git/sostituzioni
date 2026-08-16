@@ -7,16 +7,16 @@
 base = "light"
 
 # Sfondo principale: carta avorio
-backgroundColor         = "#F7F1E6"
+backgroundColor = "#F7F1E6"
 
 # Sfondo secondario (sidebar, expander, metric cards): pergamena più scura
 secondaryBackgroundColor = "#EFE6D3"
 
 # Colore primario (bottoni type=primary, slider, checkbox attivo): terracotta
-primaryColor            = "#C97D3D"
+primaryColor = "#C97D3D"
 
 # Testo principale: inchiostro scuro, non nero puro
-textColor               = "#3A2E1F"
+textColor = "#3A2E1F"
 
 # Font corpo: Inter (sans-serif pulito, ottimo su mobile)
 # Streamlit carica automaticamente Google Fonts se il nome corrisponde
