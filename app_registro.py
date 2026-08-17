@@ -465,7 +465,15 @@ def vista_pivot_docenti(df, mode="docenti"):
 # =========================
 # AVVIO APP
 # =========================
-st.title(f"📚 Sostituzioni — {PLESSO_NAME}")
+col_titolo, col_ricarica = st.columns([5, 1])
+with col_titolo:
+    st.title(f"📚 Sostituzioni — {PLESSO_NAME}")
+with col_ricarica:
+    st.write("")
+    if st.button("🔄", help="Ricarica i dati da Google Sheets"):
+        carica_orario.clear()
+        carica_statistiche.clear()
+        st.rerun()
 # assicurati che i fogli esistano con le intestazioni
 try:
     with st.spinner('Caricamento dati...'):
