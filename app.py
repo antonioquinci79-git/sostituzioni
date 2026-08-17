@@ -53,14 +53,29 @@ h1, h2 {
 # =========================
 # CONFIGURAZIONE FILE / SHEETS
 # =========================
-REQUIRED_COLUMNS = ["Docente", "Giorno", "Ora", "Classe", "Tipo", "Escludi"]
-SPREADSHEET_NAME = "OrarioSostituzioni"
-ORARIO_SHEET = "orario"
-STORICO_SHEET = "storico"
-ASSENZE_SHEET = "assenze"
-GIORNI_SETTIMANA = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì"]
-ORE_LEZIONE = ["I", "II", "III", "IV", "V", "VI"]
-TIPI_LEZIONE = ["Lezione", "Sostegno", "Altro"]
+REQUIRED_COLUMNS    = ["Docente", "Giorno", "Ora", "Classe", "Tipo", "Escludi"]
+ORARIO_SHEET        = "orario"
+STORICO_SHEET       = "storico"
+ASSENZE_SHEET       = "assenze"
+GIORNI_SETTIMANA    = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì"]
+ORE_LEZIONE         = ["I", "II", "III", "IV", "V", "VI"]
+TIPI_LEZIONE        = ["Lezione", "Sostegno", "Altro"]
+
+# Il nome dello spreadsheet e il nome del plesso vengono letti dai secrets,
+# così lo stesso app.py può essere deployato due volte puntando a fogli diversi.
+# Aggiungi in Settings → Secrets di ciascun deployment su Streamlit Cloud:
+#   spreadsheet_name = "OrarioSostituzioni_Centrale"   (oppure _Castaldi)
+#   plesso_name      = "Plesso Centrale"               (oppure Castaldi)
+try:
+    SPREADSHEET_NAME = st.secrets["spreadsheet_name"]
+    PLESSO_NAME      = st.secrets["plesso_name"]
+except KeyError:
+    st.error(
+        "Configurazione mancante nei secrets. Aggiungi in Settings → Secrets:\n\n"
+        "```\nspreadsheet_name = \"OrarioSostituzioni_Centrale\"\n"
+        "plesso_name      = \"Plesso Centrale\"\n```"
+    )
+    st.stop()
 
 # =========================
 # CLIENT GOOGLE DRIVE
@@ -569,7 +584,7 @@ with st.expander("🔧 Diagnostica Google", expanded=False):
 # =========================
 # AVVIO APP
 # =========================
-st.title("📚 Sostituzioni docenti")
+st.title(f"📚 Sostituzioni — {PLESSO_NAME}")
 # assicurati che i fogli esistano con le intestazioni
 try:
     with st.spinner('Caricamento dati...'):
