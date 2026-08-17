@@ -70,10 +70,11 @@ try:
     SPREADSHEET_NAME = st.secrets["app"]["spreadsheet_name"]
     PLESSO_NAME      = st.secrets["app"]["plesso_name"]
 except KeyError:
-    st.error("Configurazione mancante nei secrets.")
-    st.write("Chiavi disponibili nei secrets:", list(st.secrets.keys()))
-    if "app" in st.secrets:
-        st.write("Chiavi in [app]:", list(st.secrets["app"].keys()))
+    st.error(
+        "Configurazione mancante nei secrets. Aggiungi in Settings → Secrets:\n\n"
+        "```\n[app]\nspreadsheet_name = \"OrarioSostituzioni_Centrale\"\n"
+        "plesso_name = \"Plesso Centrale\"\n```"
+    )
     st.stop()
 
 # =========================
