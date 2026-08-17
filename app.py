@@ -68,7 +68,7 @@ TIPI_LEZIONE        = ["Lezione", "Sostegno", "Altro"]
 #   plesso_name      = "Plesso Centrale"               (oppure Castaldi)
 try:
     SPREADSHEET_NAME = st.secrets["spreadsheet_name"]
-    PLESSO_NAME      = st.secrets["plesso_name"]
+    PLESSO_NAME = st.secrets["plesso_name"]
 except KeyError:
     st.error(
         "Configurazione mancante nei secrets. Aggiungi in Settings → Secrets:\n\n"
