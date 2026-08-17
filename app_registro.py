@@ -4,6 +4,7 @@ import os
 import re
 import io
 import json
+import base64
 import zipfile
 import gspread
 import gspread_dataframe as gd
@@ -465,7 +466,39 @@ def vista_pivot_docenti(df, mode="docenti"):
 # =========================
 # AVVIO APP
 # =========================
-st.title(f"📚 Sostituzioni — {PLESSO_NAME}")
+def mostra_intestazione():
+    """Mostra l'intestazione grafica (SVG) al posto del titolo testuale.
+    Sceglie il file giusto in base al plesso configurato nei secrets, così
+    lo stesso app.py funziona su entrambi i deployment (Centrale/Castaldi).
+    I file SVG devono trovarsi nella stessa cartella di questo script, sul
+    repository Git collegato al deployment Streamlit Cloud.
+
+    L'SVG viene incapsulato in un tag <img> con data URI in base64: se lo
+    passassimo come markup HTML grezzo, il parser Markdown di Streamlit
+    spezzerebbe il blocco alle righe vuote interne all'SVG, facendo
+    "sfuggire" i tag <text> fuori dal contesto SVG (visibili come testo
+    normale invece che come parte del disegno)."""
+    mappa_svg = {
+        "plesso centrale": "intestazione_plesso_centrale.svg",
+        "plesso castaldi": "intestazione_plesso_castaldi.svg",
+    }
+    nome_file = mappa_svg.get(PLESSO_NAME.strip().lower())
+    svg_path = os.path.join(os.path.dirname(__file__), nome_file) if nome_file else None
+    try:
+        if not svg_path:
+            raise FileNotFoundError
+        with open(svg_path, "rb") as f:
+            svg_bytes = f.read()
+        b64 = base64.b64encode(svg_bytes).decode("utf-8")
+        st.markdown(
+            f'<img src="data:image/svg+xml;base64,{b64}" style="width:100%;" alt="{PLESSO_NAME}" />',
+            unsafe_allow_html=True,
+        )
+    except FileNotFoundError:
+        # Fallback al titolo testuale se il file SVG non è presente
+        st.title(f"📚 Sostituzioni — {PLESSO_NAME}")
+
+mostra_intestazione()
 
 # assicurati che i fogli esistano con le intestazioni
 try:
