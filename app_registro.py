@@ -465,15 +465,8 @@ def vista_pivot_docenti(df, mode="docenti"):
 # =========================
 # AVVIO APP
 # =========================
-col_titolo, col_ricarica = st.columns([5, 1])
-with col_titolo:
-    st.title(f"📚 Sostituzioni — {PLESSO_NAME}")
-with col_ricarica:
-    st.write("")
-    if st.button("🔄", help="Ricarica i dati da Google Sheets"):
-        carica_orario.clear()
-        carica_statistiche.clear()
-        st.rerun()
+st.title(f"📚 Sostituzioni — {PLESSO_NAME}")
+
 # assicurati che i fogli esistano con le intestazioni
 try:
     with st.spinner('Caricamento dati...'):
@@ -488,10 +481,16 @@ with st.spinner('Caricamento orario...'):
 # MENU PRINCIPALE (mobile-friendly)
 # =========================
 menu = st.segmented_control(
-"Navigazione",
-["Inserisci/Modifica Orario", "Gestione Assenze", "Visualizza Orario", "Statistiche"],
-selection_mode="single"
+    "Navigazione",
+    ["Inserisci/Modifica Orario", "Gestione Assenze", "Visualizza Orario", "Statistiche", "🔄 Ricarica dati"],
+    selection_mode="single"
 )
+
+if menu == "🔄 Ricarica dati":
+    carica_orario.clear()
+    carica_statistiche.clear()
+    st.success("Dati ricaricati da Google Sheets ✅")
+    st.rerun()
 
 
 
