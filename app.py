@@ -48,8 +48,16 @@ html, body, [class*="css"] {
 }
 
 /* Contenitore dell'intestazione SVG: la stacca dallo sfondo con
-   ombra e angoli arrotondati invece di restare "incollata" in alto */
+   ombra e angoli arrotondati invece di restare "incollata" in alto.
+   height:auto + object-fit:contain evitano che l'immagine venga
+   ritagliata quando il rapporto larghezza/altezza cambia su schermi
+   stretti (mobile) o nella finestra ridimensionata (Mac). */
 .block-container > div:first-child img[alt] {
+    width: 100% !important;
+    height: auto !important;
+    max-width: 100%;
+    object-fit: contain;
+    display: block;
     border-radius: 16px;
     box-shadow: 0 4px 14px rgba(58, 46, 31, 0.15);
     margin-bottom: 0.6rem;
@@ -563,36 +571,33 @@ def vista_pivot_docenti(df, mode="docenti"):
 # AVVIO APP
 # =========================
 def mostra_intestazione():
-    """Mostra l'intestazione grafica (SVG) al posto del titolo testuale.
-    Sceglie il file giusto in base al plesso configurato nei secrets, così
-    lo stesso app.py funziona su entrambi i deployment (Centrale/Castaldi).
-    I file SVG devono trovarsi nella stessa cartella di questo script, sul
-    repository Git collegato al deployment Streamlit Cloud.
-
-    L'SVG viene incapsulato in un tag <img> con data URI in base64: se lo
-    passassimo come markup HTML grezzo, il parser Markdown di Streamlit
-    spezzerebbe il blocco alle righe vuote interne all'SVG, facendo
-    "sfuggire" i tag <text> fuori dal contesto SVG (visibili come testo
-    normale invece che come parte del disegno)."""
-    mappa_svg = {
-        "plesso centrale": "intestazione_plesso_centrale.svg",
-        "plesso castaldi": "intestazione_plesso_castaldi.svg",
-    }
-    nome_file = mappa_svg.get(PLESSO_NAME.strip().lower())
-    svg_path = os.path.join(os.path.dirname(__file__), nome_file) if nome_file else None
-    try:
-        if not svg_path:
-            raise FileNotFoundError
-        with open(svg_path, "rb") as f:
-            svg_bytes = f.read()
-        b64 = base64.b64encode(svg_bytes).decode("utf-8")
-        st.markdown(
-            f'<img src="data:image/svg+xml;base64,{b64}" style="width:100%;" alt="{PLESSO_NAME}" />',
-            unsafe_allow_html=True,
-        )
-    except FileNotFoundError:
-        # Fallback al titolo testuale se il file SVG non è presente
-        st.title(f"📚 Sostituzioni — {PLESSO_NAME}")
+    """Intestazione compatta in HTML/CSS puro (niente più file SVG esterni):
+    un banner basso con icona, nome plesso e sottotitolo. Elimina il rischio
+    di "taglio" su schermi stretti (mobile) o in finestre ridimensionate
+    (Mac), perché non dipende da viewBox/dimensioni fisse di un'immagine:
+    si adatta col normale flusso del testo."""
+    st.markdown(
+        f"""
+<div style="
+    display:flex; align-items:center; gap:14px;
+    background:linear-gradient(135deg, #EFE6D3, #FBF4E6);
+    border:1.5px solid #E3D9C2; border-radius:16px;
+    padding:14px 18px; margin-bottom:0.8rem;
+    box-shadow:0 3px 10px rgba(58,46,31,0.12);
+">
+  <div style="font-size:2.1em; line-height:1;">🏫</div>
+  <div>
+    <div style="font-size:1.35em; font-weight:800; color:#3A2E1F; line-height:1.15;">
+      {PLESSO_NAME}
+    </div>
+    <div style="font-size:0.95em; color:#9C5F2C; font-weight:600;">
+      Gestione sostituzioni docenti
+    </div>
+  </div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
 
 mostra_intestazione()
 
@@ -609,11 +614,23 @@ with st.spinner('Caricamento orario...'):
 # =========================
 # MENU PRINCIPALE (mobile-friendly)
 # =========================
-menu = st.segmented_control(
+ETICHETTE_MENU = {
+    "Inserisci/Modifica Orario": "📝 Orario",
+    "Gestione Assenze": "🚨 Assenze",
+    "Visualizza Orario": "📅 Vedi orario",
+    "Statistiche": "📊 Statistiche",
+    "🔄 Ricarica dati": "🔄 Ricarica",
+}
+
+menu_scelto_label = st.segmented_control(
     "Navigazione",
-    ["Inserisci/Modifica Orario", "Gestione Assenze", "Visualizza Orario", "Statistiche", "🔄 Ricarica dati"],
+    list(ETICHETTE_MENU.values()),
     selection_mode="single"
 )
+# Rimappo l'etichetta corta scelta sull'utente al valore "lungo" originale,
+# così tutti i confronti "menu == ..." più sotto restano invariati.
+etichette_inverse = {v: k for k, v in ETICHETTE_MENU.items()}
+menu = etichette_inverse.get(menu_scelto_label)
 
 if menu == "🔄 Ricarica dati":
     carica_orario.clear()
