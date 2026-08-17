@@ -20,33 +20,129 @@ from datetime import datetime
 # piccolo tocco decorativo sui titoli.
 st.markdown("""
 <style>
-/* Bottoni più grandi (comodi da toccare su mobile) */
-.stButton button {
-    width: 100%;
-    padding: 0.8em;
-    font-size: 1.05em;
+/* =========================================================
+   PALETTE "Diario di classe": stessi colori già usati nelle
+   card di Statistiche, riportati anche su bottoni e header.
+   ========================================================= */
+:root {
+    --dc-marrone-scuro: #3A2E1F;
+    --dc-marrone: #9C5F2C;
+    --dc-arancio: #C97D3D;
+    --dc-crema: #EFE6D3;
+    --dc-crema-chiaro: #FBF4E6;
+    --dc-bordo: #E3D9C2;
 }
 
-/* Tabelle: font più piccolo e leggibile */
-.stDataFrame, .stDataEditor {
-    font-size: 0.9em !important;
-}
-
-/* Input: allarga i selectbox */
-.stSelectbox, .stTextInput, .stDateInput, .stMultiSelect {
-    width: 100% !important;
+/* Font di base più grande su tutta l'app (specialmente utile su mobile,
+   dove il default Streamlit è spesso troppo piccolo per essere letto
+   comodamente in piedi/di fretta, come capita spesso a scuola) */
+html, body, [class*="css"] {
+    font-size: 17px;
 }
 
 /* Margini orizzontali per respirare su mobile */
 .block-container {
     padding-left: 1rem;
     padding-right: 1rem;
+    padding-top: 1rem;
 }
 
-/* Tocco "diario di classe": una sottile riga sotto i titoli di sezione */
+/* Contenitore dell'intestazione SVG: la stacca dallo sfondo con
+   ombra e angoli arrotondati invece di restare "incollata" in alto */
+.block-container > div:first-child img[alt] {
+    border-radius: 16px;
+    box-shadow: 0 4px 14px rgba(58, 46, 31, 0.15);
+    margin-bottom: 0.6rem;
+}
+
+/* =========================================================
+   BOTTONI: più grandi, colorati, con ombra — pensati per il
+   tocco col pollice su mobile (min-height ~48px consigliati)
+   ========================================================= */
+.stButton button {
+    width: 100%;
+    min-height: 3em;
+    padding: 0.85em 1em;
+    font-size: 1.1em;
+    font-weight: 700;
+    border-radius: 14px;
+    border: none;
+    background: linear-gradient(135deg, var(--dc-arancio), #B56A2E);
+    color: white;
+    box-shadow: 0 3px 8px rgba(58, 46, 31, 0.25);
+    transition: transform 0.05s ease, box-shadow 0.15s ease;
+}
+.stButton button:hover {
+    box-shadow: 0 5px 12px rgba(58, 46, 31, 0.3);
+}
+.stButton button:active {
+    transform: scale(0.98);
+}
+/* Bottoni secondari (type="secondary", quelli di default senza type="primary")
+   restano riconoscibili ma meno "urgenti" alla vista */
+.stButton button[kind="secondary"] {
+    background: var(--dc-crema-chiaro);
+    color: var(--dc-marrone-scuro);
+    border: 1.5px solid var(--dc-bordo);
+    box-shadow: none;
+}
+
+/* =========================================================
+   MENU DI NAVIGAZIONE (st.segmented_control): il pezzo più
+   usato su mobile, va reso ben visibile e comodo da toccare
+   ========================================================= */
+[data-testid="stSegmentedControl"] {
+    gap: 0.4rem;
+}
+[data-testid="stSegmentedControl"] label {
+    min-height: 3em;
+    padding: 0.6em 0.8em !important;
+    font-size: 1.08em !important;
+    font-weight: 600;
+    border-radius: 14px !important;
+    border: 1.5px solid var(--dc-bordo) !important;
+    background: var(--dc-crema-chiaro) !important;
+    color: var(--dc-marrone-scuro) !important;
+}
+[data-testid="stSegmentedControl"] label[aria-checked="true"],
+[data-testid="stSegmentedControl"] label[data-selected="true"] {
+    background: var(--dc-arancio) !important;
+    border-color: var(--dc-arancio) !important;
+    color: white !important;
+    box-shadow: 0 3px 8px rgba(58, 46, 31, 0.25);
+}
+
+/* Tabelle: leggibili ma non enormi (restano dense per dati tabellari) */
+.stDataFrame, .stDataEditor {
+    font-size: 0.95em !important;
+    border-radius: 12px !important;
+    overflow: hidden;
+}
+
+/* Input: allarga i selectbox e li rende più alti al tocco */
+.stSelectbox, .stTextInput, .stDateInput, .stMultiSelect {
+    width: 100% !important;
+}
+.stSelectbox > div, .stTextInput > div, .stDateInput > div, .stMultiSelect > div {
+    min-height: 2.6em;
+}
+
+/* Titoli di sezione: più grandi, spaziati, con la riga "diario di classe" */
 h1, h2 {
-    border-bottom: 1px solid #E3D9C2;
-    padding-bottom: 0.3em;
+    color: var(--dc-marrone-scuro);
+    border-bottom: 2px solid var(--dc-bordo);
+    padding-bottom: 0.35em;
+    margin-top: 1.1em;
+}
+h1 { font-size: 1.7em; }
+h2 { font-size: 1.4em; }
+h3 { font-size: 1.2em; color: var(--dc-marrone); }
+
+/* Su schermi molto stretti (telefoni), tutto ancora un filo più grande */
+@media (max-width: 480px) {
+    html, body, [class*="css"] { font-size: 18px; }
+    .stButton button { font-size: 1.15em; padding: 1em; }
+    [data-testid="stSegmentedControl"] label { font-size: 1.1em !important; }
 }
 </style>
 """, unsafe_allow_html=True)
