@@ -656,7 +656,7 @@ if menu == "🔄 Ricarica dati":
 
 # --- INSERIMENTO/MODIFICA ORARIO ---
 if menu == "Inserisci/Modifica Orario":
-    st.header("➕ Inserisci o modifica l'orario")
+    st.header("➕ Modifica orario")
 
     uploaded_file = st.file_uploader("Carica un nuovo orario (CSV)", type="csv")
     if uploaded_file:
@@ -776,7 +776,7 @@ if menu == "Inserisci/Modifica Orario":
 
 # --- GESTIONE ASSENZE ---
 elif menu == "Gestione Assenze":
-    st.header("🚨 Gestione Assenze")
+    st.header("🚨 Assenze")
 
     if orario_df.empty:
         st.warning("Non hai ancora caricato nessun orario.")
@@ -1225,7 +1225,7 @@ elif menu == "Visualizza Orario":
 
 # --- STATISTICHE ---
 elif menu == "Statistiche":
-    st.header("📊 Statistiche Sostituzioni")
+    st.header("📊 Statistiche")
     with st.spinner('Caricamento statistiche...'):
         df_storico, df_assenze = carica_statistiche()
 
