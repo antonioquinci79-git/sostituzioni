@@ -44,7 +44,21 @@ html, body, [class*="css"] {
 .block-container {
     padding-left: 1rem;
     padding-right: 1rem;
-    padding-top: 1rem;
+    /* Più spazio sopra: 1rem non basta a scendere sotto la toolbar fissa
+       di Streamlit (☰ / Deploy), che ha altezza variabile a seconda del
+       browser. Su Mac/mobile questo faceva "tagliare" la parte alta
+       dell'intestazione, coperta dalla toolbar. Aggiungo anche
+       env(safe-area-inset-top) per rispettare notch/barre dinamiche
+       dei browser mobili (iOS Safari, ecc.). */
+    padding-top: calc(3.2rem + env(safe-area-inset-top, 0px));
+}
+
+/* La toolbar di Streamlit resta semi-trasparente per default e può
+   "fondersi" visivamente col contenuto sottostante durante lo scroll:
+   le do uno sfondo pieno coerente col tema, così non sembra che tagli
+   l'intestazione quando ci passa sopra. */
+header[data-testid="stHeader"] {
+    background: var(--dc-crema-chiaro, #FBF4E6);
 }
 
 /* Contenitore dell'intestazione SVG: la stacca dallo sfondo con
