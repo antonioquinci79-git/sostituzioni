@@ -465,7 +465,29 @@ def vista_pivot_docenti(df, mode="docenti"):
 # =========================
 # AVVIO APP
 # =========================
-st.title(f"📚 Sostituzioni — {PLESSO_NAME}")
+def mostra_intestazione():
+    """Mostra l'intestazione grafica (SVG) al posto del titolo testuale.
+    Sceglie il file giusto in base al plesso configurato nei secrets, così
+    lo stesso app.py funziona su entrambi i deployment (Centrale/Castaldi).
+    I file SVG devono trovarsi nella stessa cartella di questo script, sul
+    repository Git collegato al deployment Streamlit Cloud."""
+    mappa_svg = {
+        "plesso centrale": "intestazione_plesso_centrale.svg",
+        "plesso castaldi": "intestazione_plesso_castaldi.svg",
+    }
+    nome_file = mappa_svg.get(PLESSO_NAME.strip().lower())
+    svg_path = os.path.join(os.path.dirname(__file__), nome_file) if nome_file else None
+    try:
+        if not svg_path:
+            raise FileNotFoundError
+        with open(svg_path, "r", encoding="utf-8") as f:
+            svg_content = f.read()
+        st.markdown(svg_content, unsafe_allow_html=True)
+    except FileNotFoundError:
+        # Fallback al titolo testuale se il file SVG non è presente
+        st.title(f"📚 Sostituzioni — {PLESSO_NAME}")
+
+mostra_intestazione()
 
 # assicurati che i fogli esistano con le intestazioni
 try:
