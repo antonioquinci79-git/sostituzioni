@@ -65,16 +65,13 @@ TIPI_LEZIONE        = ["Lezione", "Sostegno", "Altro"]
 # così lo stesso app.py può essere deployato due volte puntando a fogli diversi.
 # Aggiungi in Settings → Secrets di ciascun deployment su Streamlit Cloud:
 #   spreadsheet_name = "OrarioSostituzioni_Centrale"   (oppure _Castaldi)
-#   plesso_name = "Plesso Centrale"               (oppure Castaldi)
+#   plesso_name      = "Plesso Centrale"               (oppure Castaldi)
 try:
     SPREADSHEET_NAME = st.secrets["spreadsheet_name"]
-    PLESSO_NAME = st.secrets["plesso_name"]
+    PLESSO_NAME      = st.secrets["plesso_name"]
 except KeyError:
-    st.error(
-        "Configurazione mancante nei secrets. Aggiungi in Settings → Secrets:\n\n"
-        "```\nspreadsheet_name = \"OrarioSostituzioni_Centrale\"\n"
-        "plesso_name = \"Plesso Centrale\"\n```"
-    )
+    st.error("Configurazione mancante nei secrets.")
+    st.write("Chiavi disponibili nei secrets:", list(st.secrets.keys()))
     st.stop()
 
 # =========================
