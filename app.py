@@ -87,115 +87,6 @@ SCOPE = [
 ]
 
 
-def diagnostica_google_credentials():
-    """
-    Diagnostica temporaneamente le credenziali del service account senza
-    mostrare mai la private_key.
-
-    Verifica:
-    1) quale service account e quale private_key_id sta leggendo Streamlit;
-    2) se la private_key è PEM valida;
-    3) se la chiave pubblica derivata dalla private_key coincide con quella
-       pubblicata da Google per lo stesso private_key_id.
-    """
-    import hashlib
-    import requests
-    from cryptography.hazmat.primitives import serialization
-    from cryptography.x509 import load_pem_x509_certificate
-
-    try:
-        credentials = st.secrets["gdrive"]
-
-        email = credentials["client_email"]
-        key_id = credentials["private_key_id"]
-        private_key = credentials["private_key"]
-
-        # Fingerprint della stringa della private key presente nei Secrets.
-        # NON viene mai mostrata la private key.
-        private_key_hash = hashlib.sha256(
-            private_key.encode("utf-8")
-        ).hexdigest()
-
-        # Carica la private key e ricava la relativa chiave pubblica.
-        private_key_obj = serialization.load_pem_private_key(
-            private_key.encode("utf-8"),
-            password=None
-        )
-
-        public_key_from_private = private_key_obj.public_key().public_bytes(
-            encoding=serialization.Encoding.DER,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo
-        )
-
-        public_key_hash = hashlib.sha256(
-            public_key_from_private
-        ).hexdigest()
-
-        # Recupera da Google il certificato pubblico associato al service account.
-        url = (
-            "https://www.googleapis.com/service_accounts/v1/metadata/x509/"
-            + email
-        )
-
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
-        certificates = response.json()
-
-        if key_id not in certificates:
-            return {
-                "ok": False,
-                "errore": (
-                    "Google non espone una chiave con questo private_key_id."
-                ),
-                "email": email,
-                "key_id": key_id,
-                "chiavi_visibili_a_google": list(certificates.keys()),
-                "private_key_valida": True,
-                "hash_private_key": private_key_hash,
-            }
-
-        certificate_pem = certificates[key_id]
-
-        certificate = load_pem_x509_certificate(
-            certificate_pem.encode("utf-8")
-        )
-
-        public_key_from_google = certificate.public_key().public_bytes(
-            encoding=serialization.Encoding.DER,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo
-        )
-
-        google_public_key_hash = hashlib.sha256(
-            public_key_from_google
-        ).hexdigest()
-
-        matches = public_key_hash == google_public_key_hash
-
-        return {
-            "ok": True,
-            "email": email,
-            "key_id": key_id,
-            "private_key_valida": True,
-            "private_key_public_hash": public_key_hash,
-            "google_public_key_hash": google_public_key_hash,
-            "CHIAVI_CORRISPONDONO": matches,
-            "hash_private_key": private_key_hash,
-            "diagnosi": (
-                "La private_key corrisponde alla chiave pubblica registrata "
-                "da Google."
-                if matches
-                else
-                "ATTENZIONE: la private_key nei Secrets NON corrisponde "
-                "alla chiave pubblica registrata da Google per questo key_id."
-            ),
-        }
-
-    except Exception as e:
-        return {
-            "ok": False,
-            "errore": repr(e),
-        }
-
 
 @st.cache_resource(show_spinner=False)
 def get_gdrive_client():
@@ -570,16 +461,6 @@ def vista_pivot_docenti(df, mode="docenti"):
 # =========================
 # DIAGNOSTICA TEMPORANEA GOOGLE
 # =========================
-with st.expander("🔧 Diagnostica Google", expanded=False):
-    st.caption(
-        "Test temporaneo delle credenziali del service account. "
-        "La private key non viene mai mostrata."
-    )
-    if st.button("Esegui test credenziali Google", key="diagnostica_google"):
-        with st.spinner("Verifica delle credenziali Google in corso..."):
-            risultato = diagnostica_google_credentials()
-        st.json(risultato)
-
 
 # =========================
 # AVVIO APP
