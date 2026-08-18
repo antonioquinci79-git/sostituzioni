@@ -777,18 +777,6 @@ elif menu == "Gestione Assenze":
         st.warning("Non hai ancora caricato nessun orario.")
     else:
         docenti_assenti = st.multiselect("Seleziona docenti assenti", sorted(orario_df["Docente"].unique()))
-
-        if docenti_assenti:
-            badge_assenti = " ".join(
-                f'<span style="background:#A3432D;color:white;border-radius:8px;'
-                f'padding:4px 10px;font-size:0.85em;font-weight:700;margin:2px;display:inline-block;">'
-                f'✗ {d}</span>'
-                for d in docenti_assenti
-            )
-            st.markdown(
-                f'<div style="margin-bottom:8px;">{badge_assenti}</div>',
-                unsafe_allow_html=True
-            )
         data_sostituzione = st.date_input("Data della sostituzione")
 
         # Giorno calcolato automaticamente dalla data (in italiano)
