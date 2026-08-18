@@ -914,22 +914,21 @@ elif menu == "Gestione Assenze":
                 def tipo_docente(d):
                     return docente_tipo_map.get(d, "")
 
-                # Ordino per ora (I → VI) usando l'indice di ORE_LEZIONE per
-                # garantire l'ordine corretto indipendentemente dal tipo della colonna.
-                ore_assenti = ore_assenti.copy()
-                ore_assenti["Ora"] = ore_assenti["Ora"].astype(str)
-                ore_assenti["_ora_idx"] = ore_assenti["Ora"].map(
-                    {o: i for i, o in enumerate(ORE_LEZIONE)}
-                ).fillna(99)
-                ore_assenti = ore_assenti.sort_values(["_ora_idx", "Docente"]).drop(columns=["_ora_idx"]).reset_index(drop=True)
+                # Ordino per ora (I → VI) in modo che tutte le I ore compaiano
+                # insieme, poi le II, ecc. — indipendentemente da quanti docenti
+                # sono assenti e dall'ordine in cui sono stati selezionati.
+                ore_assenti["Ora"] = pd.Categorical(
+                    ore_assenti["Ora"], categories=ORE_LEZIONE, ordered=True
+                )
+                ore_assenti = ore_assenti.sort_values(["Ora", "Docente"]).reset_index(drop=True)
 
                 ora_corrente = None  # tiene traccia dell'ora per mostrare il separatore
 
                 # Per ogni ora scoperta costruisco la lista di opzioni con l'ordine richiesto
                 for _, row in ore_assenti.iterrows():
-                    ora = str(row["Ora"])
-                    classe = str(row["Classe"])
-                    assente = str(row["Docente"])
+                    ora = row["Ora"]
+                    classe = row["Classe"]
+                    assente = row["Docente"]
 
                     # Intestazione visiva quando cambia l'ora
                     if ora != ora_corrente:
