@@ -909,17 +909,38 @@ elif menu == "Gestione Assenze":
                 # loro può comparire come possibile sostituto, in nessuna ora.
                 docenti_assenti_set = set(docenti_assenti)
 
-                # Mappa docente -> tipo, calcolata UNA volta sola (prima costava un filtro
-                # su tutto orario_df per ogni singolo docente, ad ogni ora scoperta)
+                # Mappa docente -> tipo, calcolata UNA volta sola
                 docente_tipo_map = build_docente_tipo_map(orario_df)
                 def tipo_docente(d):
                     return docente_tipo_map.get(d, "")
+
+                # Ordino per ora (I → VI) in modo che tutte le I ore compaiano
+                # insieme, poi le II, ecc. — indipendentemente da quanti docenti
+                # sono assenti e dall'ordine in cui sono stati selezionati.
+                ore_assenti["Ora"] = pd.Categorical(
+                    ore_assenti["Ora"], categories=ORE_LEZIONE, ordered=True
+                )
+                ore_assenti = ore_assenti.sort_values(["Ora", "Docente"]).reset_index(drop=True)
+
+                ora_corrente = None  # tiene traccia dell'ora per mostrare il separatore
 
                 # Per ogni ora scoperta costruisco la lista di opzioni con l'ordine richiesto
                 for _, row in ore_assenti.iterrows():
                     ora = row["Ora"]
                     classe = row["Classe"]
                     assente = row["Docente"]
+
+                    # Intestazione visiva quando cambia l'ora
+                    if ora != ora_corrente:
+                        if ora_corrente is not None:
+                            st.markdown("<hr style='border:none;border-top:2px solid #E3D9C2;margin:16px 0 12px;'>", unsafe_allow_html=True)
+                        st.markdown(
+                            f'<div style="background:#EFE6D3;border-radius:10px;padding:8px 14px;'
+                            f'font-weight:800;font-size:1.05em;color:#3A2E1F;margin-bottom:10px;">'
+                            f'🕐 {ora} ora</div>',
+                            unsafe_allow_html=True
+                        )
+                        ora_corrente = ora
 
                     # Docenti presenti in quell'ora (escludiamo chi ha Escludi=True e
                     # chiunque sia stato segnato assente oggi, non solo l'assente di questa riga)
@@ -1044,7 +1065,7 @@ elif menu == "Gestione Assenze":
                     col_sx, col_dx = st.columns([3, 1])
                     with col_sx:
                         st.markdown(
-                            f"**{ora} ora** · Classe {classe} · Assente: *{assente}*",
+                            f"Classe **{classe}** · Assente: *{assente}*",
                         )
                     bg, fg, ico = _colore_tipo(proposto_display)
                     with col_dx:
