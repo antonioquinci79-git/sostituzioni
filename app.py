@@ -780,7 +780,6 @@ elif menu == "Gestione Assenze":
     if orario_df.empty:
         st.warning("Non hai ancora caricato nessun orario.")
     else:
-        docenti_assenti = st.multiselect("Seleziona docenti assenti", sorted(orario_df["Docente"].unique()))
         data_sostituzione = st.date_input("Data della sostituzione")
 
         # Giorno calcolato automaticamente dalla data (in italiano)
@@ -793,6 +792,8 @@ elif menu == "Gestione Assenze":
 
         if giorno_assente not in GIORNI_SETTIMANA:
             st.warning(f"Hai selezionato {giorno_assente}, un giorno non presente nell'orario scolastico (Lun-Ven).")
+
+        docenti_assenti = st.multiselect("Seleziona docenti assenti", sorted(orario_df["Docente"].unique()))
 
         # =========================
         # CLASSI IN USCITA DIDATTICA (libera i curricolari di quelle classi)
