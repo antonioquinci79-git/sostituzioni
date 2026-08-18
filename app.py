@@ -585,13 +585,10 @@ def vista_pivot_docenti(df, mode="docenti"):
 # AVVIO APP
 # =========================
 def mostra_intestazione():
-    """Intestazione compatta in HTML/CSS puro (niente più file SVG esterni):
-    un banner basso con icona, nome plesso e sottotitolo. Elimina il rischio
-    di "taglio" su schermi stretti (mobile) o in finestre ridimensionate
-    (Mac), perché non dipende da viewBox/dimensioni fisse di un'immagine:
-    si adatta col normale flusso del testo."""
-    st.markdown(
-        f"""
+    col_banner, col_ricarica = st.columns([9, 1])
+    with col_banner:
+        st.markdown(
+            f"""
 <div style="
     display:flex; align-items:center; gap:14px;
     background:linear-gradient(135deg, #EFE6D3, #FBF4E6);
@@ -610,8 +607,15 @@ def mostra_intestazione():
   </div>
 </div>
 """,
-        unsafe_allow_html=True,
-    )
+            unsafe_allow_html=True,
+        )
+    with col_ricarica:
+        st.write("")
+        st.write("")
+        if st.button("🔄", help="Ricarica dati da Google Sheets", key="btn_ricarica_header"):
+            carica_orario.clear()
+            carica_statistiche.clear()
+            st.rerun()
 
 mostra_intestazione()
 
@@ -630,27 +634,19 @@ with st.spinner('Caricamento orario...'):
 # =========================
 ETICHETTE_MENU = {
     "Inserisci/Modifica Orario": "📝 Orario",
-    "Gestione Assenze": "🚨 Assenze",
-    "Visualizza Orario": "📅 Vedi orario",
-    "Statistiche": "📊 Statistiche",
-    "🔄 Ricarica dati": "🔄 Ricarica",
+    "Gestione Assenze":          "🚨 Assenze",
+    "Visualizza Orario":         "📅 Vedi",
+    "Statistiche":               "📊 Stats",
 }
 
 menu_scelto_label = st.segmented_control(
     "Navigazione",
     list(ETICHETTE_MENU.values()),
-    selection_mode="single"
+    selection_mode="single",
+    default="🚨 Assenze",
 )
-# Rimappo l'etichetta corta scelta sull'utente al valore "lungo" originale,
-# così tutti i confronti "menu == ..." più sotto restano invariati.
 etichette_inverse = {v: k for k, v in ETICHETTE_MENU.items()}
 menu = etichette_inverse.get(menu_scelto_label)
-
-if menu == "🔄 Ricarica dati":
-    carica_orario.clear()
-    carica_statistiche.clear()
-    st.success("Dati ricaricati da Google Sheets ✅")
-    st.rerun()
 
 
 
@@ -782,6 +778,18 @@ elif menu == "Gestione Assenze":
         st.warning("Non hai ancora caricato nessun orario.")
     else:
         docenti_assenti = st.multiselect("Seleziona docenti assenti", sorted(orario_df["Docente"].unique()))
+
+        if docenti_assenti:
+            badge_assenti = " ".join(
+                f'<span style="background:#A3432D;color:white;border-radius:8px;'
+                f'padding:4px 10px;font-size:0.85em;font-weight:700;margin:2px;display:inline-block;">'
+                f'✗ {d}</span>'
+                for d in docenti_assenti
+            )
+            st.markdown(
+                f'<div style="margin-bottom:8px;">{badge_assenti}</div>',
+                unsafe_allow_html=True
+            )
         data_sostituzione = st.date_input("Data della sostituzione")
 
         # Giorno calcolato automaticamente dalla data (in italiano)
@@ -1017,12 +1025,60 @@ elif menu == "Gestione Assenze":
 
                     default_index = options.index(proposto_display) if proposto_display in options else 0
 
+                    # Header ora con badge colorato per tipo proposta
+                    def _colore_tipo(label):
+                        if "[S]" in label and "[NP]" not in label:
+                            return "#6B8F71", "white", "●"
+                        elif "[C] [USCITA]" in label:
+                            return "#5E7A93", "white", "✈"
+                        elif "[NP]" in label:
+                            return "#9C9C7A", "white", "○"
+                        elif "[C]" in label:
+                            return "#C97D3D", "white", "●"
+                        return "#E3D9C2", "#3A2E1F", "–"
+
+                    col_sx, col_dx = st.columns([3, 1])
+                    with col_sx:
+                        st.markdown(
+                            f"**{ora} ora** · Classe {classe} · Assente: *{assente}*",
+                        )
+                    bg, fg, ico = _colore_tipo(proposto_display)
+                    with col_dx:
+                        nome_prop = proposto_display.replace("[S] [NP] ","").replace("[C] [NP] ","") \
+                            .replace("[C] [USCITA] ","").replace("[S] ","").replace("[C] ","").strip()
+                        st.markdown(
+                            f'<div style="background:{bg};color:{fg};border-radius:8px;'
+                            f'padding:4px 8px;font-size:0.78em;font-weight:700;text-align:center;">'
+                            f'{ico} proposto</div>',
+                            unsafe_allow_html=True
+                        )
+
                     scelta = st.selectbox(
-                        f"Sostituto per {ora} ora - Classe {classe} (assente {assente})",
+                        f"Sostituto",
                         options,
                         index=default_index,
-                        key=f"sost_{assente}_{ora}_{classe}"
+                        key=f"sost_{assente}_{ora}_{classe}",
+                        label_visibility="collapsed",
                     )
+
+                    # Badge colorato per la scelta corrente
+                    bg2, fg2, ico2 = _colore_tipo(scelta)
+                    tipo_label = (
+                        "Sostegno" if "[S]" in scelta and "[NP]" not in scelta
+                        else "Uscita" if "[USCITA]" in scelta
+                        else "Non in orario" if "[NP]" in scelta
+                        else "Curricolare" if "[C]" in scelta
+                        else "—"
+                    )
+                    if scelta != "Nessuno":
+                        st.markdown(
+                            f'<div style="background:{bg2};color:{fg2};border-radius:10px;'
+                            f'padding:6px 12px;font-size:0.85em;font-weight:600;'
+                            f'margin-bottom:8px;display:inline-block;">'
+                            f'{ico2} {tipo_label}</div>',
+                            unsafe_allow_html=True
+                        )
+                    st.markdown("---")
 
                     # pulisco il nome per lo storico (rimuovo prefissi tipo "[S] [NP] " ecc.)
                     if scelta == "Nessuno":
@@ -1053,35 +1109,50 @@ elif menu == "Gestione Assenze":
                     sostituzioni_df["Ora"] = pd.Categorical(sostituzioni_df["Ora"], categories=ordine_ore, ordered=True)
                     sostituzioni_df = sostituzioni_df.sort_values("Ora").reset_index(drop=True)
 
-                # --- VISTA TABELLA (mostra la label con [S]/[C]/[NP]) ---
-                st.subheader("📋 Sostituzioni in tabella")
                 tabella_df = sostituzioni_df[["Ora", "Classe", "Assente", "Sostituto_display"]].copy()
                 tabella_df = tabella_df.rename(columns={"Sostituto_display": "Sostituzione"})
                 tabella_df["Ora"] = pd.Categorical(tabella_df["Ora"], categories=ordine_ore, ordered=True)
                 tabella_df = tabella_df.sort_values(["Ora", "Classe"]).reset_index(drop=True)
+                st.subheader("📋 Riepilogo sostituzioni")
 
-                styled_tabella = (
-                    tabella_df.style
-                        .set_table_styles([
-                            {"selector": "th.col0", "props": [("width", "50px")]},
-                            {"selector": "th.col1", "props": [("width", "80px")]},
-                            {"selector": "th", "props": [("background-color", "#EFE6D3"),
-                                                         ("color", "#3A2E1F"),
-                                                         ("font-weight", "bold"),
-                                                         ("text-align", "center"),
-                                                         ("font-size", "16px"),
-                                                         ("border-bottom", "1px solid #E3D9C2")]},
-                            {"selector": "td", "props": [("text-align", "center"),
-                                                         ("padding", "6px 12px"),
-                                                         ("font-size", "16px"),
-                                                         ("color", "#3A2E1F"),
-                                                         ("border-bottom", "1px solid #E3D9C2")]}
-                        ])
-                        .apply(lambda x: ['background-color: #FBF4E6' if i % 2 else 'background-color: #FFFFFF'
-                                          for i in range(len(x))], axis=0)
-                )
-                html = styled_tabella.hide(axis="index").to_html()
-                st.markdown(html, unsafe_allow_html=True)
+                def _badge_sostituto(label):
+                    if label == "Nessuno":
+                        return '<span style="color:#9C5F2C;font-style:italic;">— nessuno —</span>'
+                    if "[S]" in label and "[NP]" not in label:
+                        bg, fg = "#6B8F71", "white"
+                    elif "[C] [USCITA]" in label:
+                        bg, fg = "#5E7A93", "white"
+                    elif "[NP]" in label:
+                        bg, fg = "#9C9C7A", "white"
+                    elif "[C]" in label:
+                        bg, fg = "#C97D3D", "white"
+                    else:
+                        bg, fg = "#E3D9C2", "#3A2E1F"
+                    nome = (label.replace("[S] [NP] ","").replace("[C] [NP] ","")
+                                 .replace("[C] [USCITA] ","").replace("[S] ","")
+                                 .replace("[C] ","").strip())
+                    return (f'<span style="background:{bg};color:{fg};border-radius:8px;'
+                            f'padding:3px 10px;font-weight:700;font-size:0.9em;">{nome}</span>')
+
+                cards_html = ""
+                for ora_c, grp in tabella_df.groupby("Ora", sort=False):
+                    righe_html = ""
+                    for _, r in grp.iterrows():
+                        badge = _badge_sostituto(r["Sostituzione"])
+                        righe_html += (
+                            f'<div style="display:flex;justify-content:space-between;'
+                            f'align-items:center;padding:8px 0;border-bottom:1px solid #EFE6D3;">'
+                            f'<div><span style="font-weight:700;color:#3A2E1F;">Cl. {r["Classe"]}</span>'
+                            f'<span style="color:#9C5F2C;font-size:0.85em;margin-left:6px;">ass. {r["Assente"]}</span></div>'
+                            f'<div>{badge}</div></div>'
+                        )
+                    cards_html += (
+                        f'<div style="background:#FBF4E6;border:1.5px solid #E3D9C2;border-radius:14px;'
+                        f'padding:12px 14px;margin-bottom:10px;">'
+                        f'<div style="font-size:1em;font-weight:800;color:#C97D3D;margin-bottom:4px;">'
+                        f'🕐 {ora_c} ora</div>{righe_html}</div>'
+                    )
+                st.markdown(cards_html, unsafe_allow_html=True)
 
                 # --- VISTA TESTUALE ---
                 st.subheader("📝 Sostituzioni in formato testo (mobile/copincolla)")
