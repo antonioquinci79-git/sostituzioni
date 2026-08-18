@@ -138,7 +138,6 @@ header[data-testid="stHeader"] {
 .stDataFrame, .stDataEditor {
     font-size: 0.95em !important;
     border-radius: 12px !important;
-    overflow: hidden;
 }
 
 /* Input: allarga i selectbox e li rende più alti al tocco */
