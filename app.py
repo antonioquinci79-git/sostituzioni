@@ -1,10 +1,8 @@
 import streamlit as st
 import pandas as pd
-import os
 import re
 import io
 import json
-import base64
 import zipfile
 import gspread
 import gspread_dataframe as gd
@@ -490,6 +488,38 @@ def trova_conflitti_orario(df):
     conteggi = df.groupby(["Docente", "Giorno", "Ora"]).size()
     return [idx for idx, n in conteggi.items() if n > 1 and idx[0].strip() != ""]
 
+def _colore_tipo(label):
+    """Restituisce (bg, fg, icona) in base al tipo di sostituto nel label."""
+    if "[S]" in label and "[NP]" not in label:
+        return "#6B8F71", "white", "●"
+    elif "[C] [USCITA]" in label:
+        return "#5E7A93", "white", "✈"
+    elif "[NP]" in label:
+        return "#9C9C7A", "white", "○"
+    elif "[C]" in label:
+        return "#C97D3D", "white", "●"
+    return "#E3D9C2", "#3A2E1F", "–"
+
+def _badge_sostituto(label):
+    """Restituisce HTML di un badge colorato con il nome pulito del sostituto."""
+    if label == "Nessuno":
+        return '<span style="color:#9C5F2C;font-style:italic;">— nessuno —</span>'
+    if "[S]" in label and "[NP]" not in label:
+        bg, fg = "#6B8F71", "white"
+    elif "[C] [USCITA]" in label:
+        bg, fg = "#5E7A93", "white"
+    elif "[NP]" in label:
+        bg, fg = "#9C9C7A", "white"
+    elif "[C]" in label:
+        bg, fg = "#C97D3D", "white"
+    else:
+        bg, fg = "#E3D9C2", "#3A2E1F"
+    nome = (label.replace("[S] [NP] ", "").replace("[C] [NP] ", "")
+                 .replace("[C] [USCITA] ", "").replace("[S] ", "")
+                 .replace("[C] ", "").strip())
+    return (f'<span style="background:{bg};color:{fg};border-radius:8px;'
+            f'padding:3px 10px;font-weight:700;font-size:0.9em;">{nome}</span>')
+
 def download_orario(df):
     if not df.empty:
         st.download_button(
@@ -575,10 +605,6 @@ def vista_pivot_docenti(df, mode="docenti"):
 
         styled = pivot.style.set_properties(**{"text-align": "center"})
         st.dataframe(styled, use_container_width=True, hide_index=True)
-
-# =========================
-# DIAGNOSTICA TEMPORANEA GOOGLE
-# =========================
 
 # =========================
 # AVVIO APP
@@ -771,8 +797,6 @@ if menu == "Inserisci/Modifica Orario":
                     st.rerun()
     download_orario(orario_df)
 
-# ... (codice precedente) ...
-
 # --- GESTIONE ASSENZE ---
 elif menu == "Gestione Assenze":
     st.header("🚨 Assenze")
@@ -885,17 +909,38 @@ elif menu == "Gestione Assenze":
                 # loro può comparire come possibile sostituto, in nessuna ora.
                 docenti_assenti_set = set(docenti_assenti)
 
-                # Mappa docente -> tipo, calcolata UNA volta sola (prima costava un filtro
-                # su tutto orario_df per ogni singolo docente, ad ogni ora scoperta)
+                # Mappa docente -> tipo, calcolata UNA volta sola
                 docente_tipo_map = build_docente_tipo_map(orario_df)
                 def tipo_docente(d):
                     return docente_tipo_map.get(d, "")
+
+                # Ordino per ora (I → VI) in modo che tutte le I ore compaiano
+                # insieme, poi le II, ecc. — indipendentemente da quanti docenti
+                # sono assenti e dall'ordine in cui sono stati selezionati.
+                ore_assenti["Ora"] = pd.Categorical(
+                    ore_assenti["Ora"], categories=ORE_LEZIONE, ordered=True
+                )
+                ore_assenti = ore_assenti.sort_values(["Ora", "Docente"]).reset_index(drop=True)
+
+                ora_corrente = None  # tiene traccia dell'ora per mostrare il separatore
 
                 # Per ogni ora scoperta costruisco la lista di opzioni con l'ordine richiesto
                 for _, row in ore_assenti.iterrows():
                     ora = row["Ora"]
                     classe = row["Classe"]
                     assente = row["Docente"]
+
+                    # Intestazione visiva quando cambia l'ora
+                    if ora != ora_corrente:
+                        if ora_corrente is not None:
+                            st.markdown("<hr style='border:none;border-top:2px solid #E3D9C2;margin:16px 0 12px;'>", unsafe_allow_html=True)
+                        st.markdown(
+                            f'<div style="background:#EFE6D3;border-radius:10px;padding:8px 14px;'
+                            f'font-weight:800;font-size:1.05em;color:#3A2E1F;margin-bottom:10px;">'
+                            f'🕐 {ora} ora</div>',
+                            unsafe_allow_html=True
+                        )
+                        ora_corrente = ora
 
                     # Docenti presenti in quell'ora (escludiamo chi ha Escludi=True e
                     # chiunque sia stato segnato assente oggi, non solo l'assente di questa riga)
@@ -1017,22 +1062,10 @@ elif menu == "Gestione Assenze":
 
                     default_index = options.index(proposto_display) if proposto_display in options else 0
 
-                    # Header ora con badge colorato per tipo proposta
-                    def _colore_tipo(label):
-                        if "[S]" in label and "[NP]" not in label:
-                            return "#6B8F71", "white", "●"
-                        elif "[C] [USCITA]" in label:
-                            return "#5E7A93", "white", "✈"
-                        elif "[NP]" in label:
-                            return "#9C9C7A", "white", "○"
-                        elif "[C]" in label:
-                            return "#C97D3D", "white", "●"
-                        return "#E3D9C2", "#3A2E1F", "–"
-
                     col_sx, col_dx = st.columns([3, 1])
                     with col_sx:
                         st.markdown(
-                            f"**{ora} ora** · Classe {classe} · Assente: *{assente}*",
+                            f"Classe **{classe}** · Assente: *{assente}*",
                         )
                     bg, fg, ico = _colore_tipo(proposto_display)
                     with col_dx:
@@ -1106,25 +1139,6 @@ elif menu == "Gestione Assenze":
                 tabella_df["Ora"] = pd.Categorical(tabella_df["Ora"], categories=ordine_ore, ordered=True)
                 tabella_df = tabella_df.sort_values(["Ora", "Classe"]).reset_index(drop=True)
                 st.subheader("📋 Riepilogo sostituzioni")
-
-                def _badge_sostituto(label):
-                    if label == "Nessuno":
-                        return '<span style="color:#9C5F2C;font-style:italic;">— nessuno —</span>'
-                    if "[S]" in label and "[NP]" not in label:
-                        bg, fg = "#6B8F71", "white"
-                    elif "[C] [USCITA]" in label:
-                        bg, fg = "#5E7A93", "white"
-                    elif "[NP]" in label:
-                        bg, fg = "#9C9C7A", "white"
-                    elif "[C]" in label:
-                        bg, fg = "#C97D3D", "white"
-                    else:
-                        bg, fg = "#E3D9C2", "#3A2E1F"
-                    nome = (label.replace("[S] [NP] ","").replace("[C] [NP] ","")
-                                 .replace("[C] [USCITA] ","").replace("[S] ","")
-                                 .replace("[C] ","").strip())
-                    return (f'<span style="background:{bg};color:{fg};border-radius:8px;'
-                            f'padding:3px 10px;font-weight:700;font-size:0.9em;">{nome}</span>')
 
                 cards_html = ""
                 for ora_c, grp in tabella_df.groupby("Ora", sort=False):
