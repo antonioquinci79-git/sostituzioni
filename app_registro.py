@@ -20,33 +20,150 @@ from datetime import datetime
 # piccolo tocco decorativo sui titoli.
 st.markdown("""
 <style>
-/* Bottoni più grandi (comodi da toccare su mobile) */
-.stButton button {
-    width: 100%;
-    padding: 0.8em;
-    font-size: 1.05em;
+/* =========================================================
+   PALETTE "Diario di classe": stessi colori già usati nelle
+   card di Statistiche, riportati anche su bottoni e header.
+   ========================================================= */
+:root {
+    --dc-marrone-scuro: #3A2E1F;
+    --dc-marrone: #9C5F2C;
+    --dc-arancio: #C97D3D;
+    --dc-crema: #EFE6D3;
+    --dc-crema-chiaro: #FBF4E6;
+    --dc-bordo: #E3D9C2;
 }
 
-/* Tabelle: font più piccolo e leggibile */
-.stDataFrame, .stDataEditor {
-    font-size: 0.9em !important;
-}
-
-/* Input: allarga i selectbox */
-.stSelectbox, .stTextInput, .stDateInput, .stMultiSelect {
-    width: 100% !important;
+/* Font di base più grande su tutta l'app (specialmente utile su mobile,
+   dove il default Streamlit è spesso troppo piccolo per essere letto
+   comodamente in piedi/di fretta, come capita spesso a scuola) */
+html, body, [class*="css"] {
+    font-size: 17px;
 }
 
 /* Margini orizzontali per respirare su mobile */
 .block-container {
     padding-left: 1rem;
     padding-right: 1rem;
+    /* Più spazio sopra: 1rem non basta a scendere sotto la toolbar fissa
+       di Streamlit (☰ / Deploy), che ha altezza variabile a seconda del
+       browser. Su Mac/mobile questo faceva "tagliare" la parte alta
+       dell'intestazione, coperta dalla toolbar. Aggiungo anche
+       env(safe-area-inset-top) per rispettare notch/barre dinamiche
+       dei browser mobili (iOS Safari, ecc.). */
+    padding-top: calc(3.2rem + env(safe-area-inset-top, 0px));
 }
 
-/* Tocco "diario di classe": una sottile riga sotto i titoli di sezione */
+/* La toolbar di Streamlit resta semi-trasparente per default e può
+   "fondersi" visivamente col contenuto sottostante durante lo scroll:
+   le do uno sfondo pieno coerente col tema, così non sembra che tagli
+   l'intestazione quando ci passa sopra. */
+header[data-testid="stHeader"] {
+    background: #FFFFFF;
+}
+
+/* Contenitore dell'intestazione SVG: la stacca dallo sfondo con
+   ombra e angoli arrotondati invece di restare "incollata" in alto.
+   height:auto + object-fit:contain evitano che l'immagine venga
+   ritagliata quando il rapporto larghezza/altezza cambia su schermi
+   stretti (mobile) o nella finestra ridimensionata (Mac). */
+.block-container > div:first-child img[alt] {
+    width: 100% !important;
+    height: auto !important;
+    max-width: 100%;
+    object-fit: contain;
+    display: block;
+    border-radius: 16px;
+    box-shadow: 0 4px 14px rgba(58, 46, 31, 0.15);
+    margin-bottom: 0.6rem;
+}
+
+/* =========================================================
+   BOTTONI: più grandi, colorati, con ombra — pensati per il
+   tocco col pollice su mobile (min-height ~48px consigliati)
+   ========================================================= */
+.stButton button {
+    width: 100%;
+    min-height: 3em;
+    padding: 0.85em 1em;
+    font-size: 1.1em;
+    font-weight: 700;
+    border-radius: 14px;
+    border: none;
+    background: linear-gradient(135deg, var(--dc-arancio), #B56A2E);
+    color: white;
+    box-shadow: 0 3px 8px rgba(58, 46, 31, 0.25);
+    transition: transform 0.05s ease, box-shadow 0.15s ease;
+}
+.stButton button:hover {
+    box-shadow: 0 5px 12px rgba(58, 46, 31, 0.3);
+}
+.stButton button:active {
+    transform: scale(0.98);
+}
+/* Bottoni secondari (type="secondary", quelli di default senza type="primary")
+   restano riconoscibili ma meno "urgenti" alla vista */
+.stButton button[kind="secondary"] {
+    background: var(--dc-crema-chiaro);
+    color: var(--dc-marrone-scuro);
+    border: 1.5px solid var(--dc-bordo);
+    box-shadow: none;
+}
+
+/* =========================================================
+   MENU DI NAVIGAZIONE (st.segmented_control): il pezzo più
+   usato su mobile, va reso ben visibile e comodo da toccare
+   ========================================================= */
+[data-testid="stSegmentedControl"] {
+    gap: 0.4rem;
+}
+[data-testid="stSegmentedControl"] label {
+    min-height: 3em;
+    padding: 0.6em 0.8em !important;
+    font-size: 1.08em !important;
+    font-weight: 600;
+    border-radius: 14px !important;
+    border: 1.5px solid var(--dc-bordo) !important;
+    background: var(--dc-crema-chiaro) !important;
+    color: var(--dc-marrone-scuro) !important;
+}
+[data-testid="stSegmentedControl"] label[aria-checked="true"],
+[data-testid="stSegmentedControl"] label[data-selected="true"] {
+    background: var(--dc-arancio) !important;
+    border-color: var(--dc-arancio) !important;
+    color: white !important;
+    box-shadow: 0 3px 8px rgba(58, 46, 31, 0.25);
+}
+
+/* Tabelle: leggibili ma non enormi (restano dense per dati tabellari) */
+.stDataFrame, .stDataEditor {
+    font-size: 0.95em !important;
+    border-radius: 12px !important;
+}
+
+/* Input: allarga i selectbox e li rende più alti al tocco */
+.stSelectbox, .stTextInput, .stDateInput, .stMultiSelect {
+    width: 100% !important;
+}
+.stSelectbox > div, .stTextInput > div, .stDateInput > div, .stMultiSelect > div {
+    min-height: 2.6em;
+}
+
+/* Titoli di sezione: più grandi, spaziati, con la riga "diario di classe" */
 h1, h2 {
-    border-bottom: 1px solid #E3D9C2;
-    padding-bottom: 0.3em;
+    color: var(--dc-marrone-scuro);
+    border-bottom: 2px solid var(--dc-bordo);
+    padding-bottom: 0.35em;
+    margin-top: 1.1em;
+}
+h1 { font-size: 1.7em; }
+h2 { font-size: 1.4em; }
+h3 { font-size: 1.2em; color: var(--dc-marrone); }
+
+/* Su schermi molto stretti (telefoni), tutto ancora un filo più grande */
+@media (max-width: 480px) {
+    html, body, [class*="css"] { font-size: 18px; }
+    .stButton button { font-size: 1.15em; padding: 1em; }
+    [data-testid="stSegmentedControl"] label { font-size: 1.1em !important; }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -467,38 +584,43 @@ def vista_pivot_docenti(df, mode="docenti"):
 # AVVIO APP
 # =========================
 def mostra_intestazione():
-    """Mostra l'intestazione grafica (SVG) al posto del titolo testuale.
-    Sceglie il file giusto in base al plesso configurato nei secrets, così
-    lo stesso app.py funziona su entrambi i deployment (Centrale/Castaldi).
-    I file SVG devono trovarsi nella stessa cartella di questo script, sul
-    repository Git collegato al deployment Streamlit Cloud.
-
-    L'SVG viene incapsulato in un tag <img> con data URI in base64: se lo
-    passassimo come markup HTML grezzo, il parser Markdown di Streamlit
-    spezzerebbe il blocco alle righe vuote interne all'SVG, facendo
-    "sfuggire" i tag <text> fuori dal contesto SVG (visibili come testo
-    normale invece che come parte del disegno)."""
-    mappa_svg = {
-        "plesso centrale": "intestazione_plesso_centrale.svg",
-        "plesso castaldi": "intestazione_plesso_castaldi.svg",
-    }
-    nome_file = mappa_svg.get(PLESSO_NAME.strip().lower())
-    svg_path = os.path.join(os.path.dirname(__file__), nome_file) if nome_file else None
-    try:
-        if not svg_path:
-            raise FileNotFoundError
-        with open(svg_path, "rb") as f:
-            svg_bytes = f.read()
-        b64 = base64.b64encode(svg_bytes).decode("utf-8")
-        st.markdown(
-            f'<img src="data:image/svg+xml;base64,{b64}" style="width:100%;" alt="{PLESSO_NAME}" />',
-            unsafe_allow_html=True,
-        )
-    except FileNotFoundError:
-        # Fallback al titolo testuale se il file SVG non è presente
-        st.title(f"📚 Sostituzioni — {PLESSO_NAME}")
+    st.markdown(
+        f"""
+<div style="
+    display:flex; align-items:center; justify-content:space-between; gap:14px;
+    background:linear-gradient(135deg, #EFE6D3, #FBF4E6);
+    border:1.5px solid #E3D9C2; border-radius:16px;
+    padding:14px 18px; margin-bottom:0.8rem;
+    box-shadow:0 3px 10px rgba(58,46,31,0.12);
+">
+  <div style="display:flex; align-items:center; gap:14px;">
+    <div style="font-size:2.1em; line-height:1;">🏫</div>
+    <div>
+      <div style="font-size:1.35em; font-weight:800; color:#3A2E1F; line-height:1.15;">
+        {PLESSO_NAME}
+      </div>
+      <div style="font-size:0.95em; color:#9C5F2C; font-weight:600;">
+        Gestione sostituzioni docenti
+      </div>
+    </div>
+  </div>
+  <a href="?ricarica=1" target="_self" title="Ricarica dati da Google Sheets" style="
+    font-size:1.5em; line-height:1; text-decoration:none;
+    color:#C97D3D; flex-shrink:0;
+  ">🔄</a>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
 
 mostra_intestazione()
+
+# Gestione ricarica via query param
+if st.query_params.get("ricarica") == "1":
+    carica_orario.clear()
+    carica_statistiche.clear()
+    st.query_params.clear()
+    st.rerun()
 
 # assicurati che i fogli esistano con le intestazioni
 try:
@@ -513,23 +635,27 @@ with st.spinner('Caricamento orario...'):
 # =========================
 # MENU PRINCIPALE (mobile-friendly)
 # =========================
-menu = st.segmented_control(
-    "Navigazione",
-    ["Inserisci/Modifica Orario", "Gestione Assenze", "Visualizza Orario", "Statistiche", "🔄 Ricarica dati"],
-    selection_mode="single"
-)
+ETICHETTE_MENU = {
+    "Inserisci/Modifica Orario": "📝 Orario",
+    "Gestione Assenze":          "🚨 Assenze",
+    "Visualizza Orario":         "📅 Vedi",
+    "Statistiche":               "📊 Stats",
+}
 
-if menu == "🔄 Ricarica dati":
-    carica_orario.clear()
-    carica_statistiche.clear()
-    st.success("Dati ricaricati da Google Sheets ✅")
-    st.rerun()
+menu_scelto_label = st.segmented_control(
+    "Navigazione",
+    list(ETICHETTE_MENU.values()),
+    selection_mode="single",
+    default="🚨 Assenze",
+)
+etichette_inverse = {v: k for k, v in ETICHETTE_MENU.items()}
+menu = etichette_inverse.get(menu_scelto_label)
 
 
 
 # --- INSERIMENTO/MODIFICA ORARIO ---
 if menu == "Inserisci/Modifica Orario":
-    st.header("➕ Inserisci o modifica l'orario")
+    st.header("➕ Modifica orario")
 
     uploaded_file = st.file_uploader("Carica un nuovo orario (CSV)", type="csv")
     if uploaded_file:
@@ -649,12 +775,11 @@ if menu == "Inserisci/Modifica Orario":
 
 # --- GESTIONE ASSENZE ---
 elif menu == "Gestione Assenze":
-    st.header("🚨 Gestione Assenze")
+    st.header("🚨 Assenze")
 
     if orario_df.empty:
         st.warning("Non hai ancora caricato nessun orario.")
     else:
-        docenti_assenti = st.multiselect("Seleziona docenti assenti", sorted(orario_df["Docente"].unique()))
         data_sostituzione = st.date_input("Data della sostituzione")
 
         # Giorno calcolato automaticamente dalla data (in italiano)
@@ -667,6 +792,8 @@ elif menu == "Gestione Assenze":
 
         if giorno_assente not in GIORNI_SETTIMANA:
             st.warning(f"Hai selezionato {giorno_assente}, un giorno non presente nell'orario scolastico (Lun-Ven).")
+
+        docenti_assenti = st.multiselect("Seleziona docenti assenti", sorted(orario_df["Docente"].unique()))
 
         # =========================
         # CLASSI IN USCITA DIDATTICA (libera i curricolari di quelle classi)
@@ -890,12 +1017,60 @@ elif menu == "Gestione Assenze":
 
                     default_index = options.index(proposto_display) if proposto_display in options else 0
 
+                    # Header ora con badge colorato per tipo proposta
+                    def _colore_tipo(label):
+                        if "[S]" in label and "[NP]" not in label:
+                            return "#6B8F71", "white", "●"
+                        elif "[C] [USCITA]" in label:
+                            return "#5E7A93", "white", "✈"
+                        elif "[NP]" in label:
+                            return "#9C9C7A", "white", "○"
+                        elif "[C]" in label:
+                            return "#C97D3D", "white", "●"
+                        return "#E3D9C2", "#3A2E1F", "–"
+
+                    col_sx, col_dx = st.columns([3, 1])
+                    with col_sx:
+                        st.markdown(
+                            f"**{ora} ora** · Classe {classe} · Assente: *{assente}*",
+                        )
+                    bg, fg, ico = _colore_tipo(proposto_display)
+                    with col_dx:
+                        nome_prop = proposto_display.replace("[S] [NP] ","").replace("[C] [NP] ","") \
+                            .replace("[C] [USCITA] ","").replace("[S] ","").replace("[C] ","").strip()
+                        st.markdown(
+                            f'<div style="background:{bg};color:{fg};border-radius:8px;'
+                            f'padding:4px 8px;font-size:0.78em;font-weight:700;text-align:center;">'
+                            f'{ico} proposto</div>',
+                            unsafe_allow_html=True
+                        )
+
                     scelta = st.selectbox(
-                        f"Sostituto per {ora} ora - Classe {classe} (assente {assente})",
+                        f"Sostituto",
                         options,
                         index=default_index,
-                        key=f"sost_{assente}_{ora}_{classe}"
+                        key=f"sost_{assente}_{ora}_{classe}",
+                        label_visibility="collapsed",
                     )
+
+                    # Badge colorato per la scelta corrente
+                    bg2, fg2, ico2 = _colore_tipo(scelta)
+                    tipo_label = (
+                        "Sostegno" if "[S]" in scelta and "[NP]" not in scelta
+                        else "Uscita" if "[USCITA]" in scelta
+                        else "Non in orario" if "[NP]" in scelta
+                        else "Curricolare" if "[C]" in scelta
+                        else "—"
+                    )
+                    if scelta != "Nessuno":
+                        st.markdown(
+                            f'<div style="background:{bg2};color:{fg2};border-radius:10px;'
+                            f'padding:6px 12px;font-size:0.85em;font-weight:600;'
+                            f'margin-bottom:8px;display:inline-block;">'
+                            f'{ico2} {tipo_label}</div>',
+                            unsafe_allow_html=True
+                        )
+                    st.markdown("---")
 
                     # pulisco il nome per lo storico (rimuovo prefissi tipo "[S] [NP] " ecc.)
                     if scelta == "Nessuno":
@@ -926,35 +1101,50 @@ elif menu == "Gestione Assenze":
                     sostituzioni_df["Ora"] = pd.Categorical(sostituzioni_df["Ora"], categories=ordine_ore, ordered=True)
                     sostituzioni_df = sostituzioni_df.sort_values("Ora").reset_index(drop=True)
 
-                # --- VISTA TABELLA (mostra la label con [S]/[C]/[NP]) ---
-                st.subheader("📋 Sostituzioni in tabella")
                 tabella_df = sostituzioni_df[["Ora", "Classe", "Assente", "Sostituto_display"]].copy()
                 tabella_df = tabella_df.rename(columns={"Sostituto_display": "Sostituzione"})
                 tabella_df["Ora"] = pd.Categorical(tabella_df["Ora"], categories=ordine_ore, ordered=True)
                 tabella_df = tabella_df.sort_values(["Ora", "Classe"]).reset_index(drop=True)
+                st.subheader("📋 Riepilogo sostituzioni")
 
-                styled_tabella = (
-                    tabella_df.style
-                        .set_table_styles([
-                            {"selector": "th.col0", "props": [("width", "50px")]},
-                            {"selector": "th.col1", "props": [("width", "80px")]},
-                            {"selector": "th", "props": [("background-color", "#EFE6D3"),
-                                                         ("color", "#3A2E1F"),
-                                                         ("font-weight", "bold"),
-                                                         ("text-align", "center"),
-                                                         ("font-size", "16px"),
-                                                         ("border-bottom", "1px solid #E3D9C2")]},
-                            {"selector": "td", "props": [("text-align", "center"),
-                                                         ("padding", "6px 12px"),
-                                                         ("font-size", "16px"),
-                                                         ("color", "#3A2E1F"),
-                                                         ("border-bottom", "1px solid #E3D9C2")]}
-                        ])
-                        .apply(lambda x: ['background-color: #FBF4E6' if i % 2 else 'background-color: #FFFFFF'
-                                          for i in range(len(x))], axis=0)
-                )
-                html = styled_tabella.hide(axis="index").to_html()
-                st.markdown(html, unsafe_allow_html=True)
+                def _badge_sostituto(label):
+                    if label == "Nessuno":
+                        return '<span style="color:#9C5F2C;font-style:italic;">— nessuno —</span>'
+                    if "[S]" in label and "[NP]" not in label:
+                        bg, fg = "#6B8F71", "white"
+                    elif "[C] [USCITA]" in label:
+                        bg, fg = "#5E7A93", "white"
+                    elif "[NP]" in label:
+                        bg, fg = "#9C9C7A", "white"
+                    elif "[C]" in label:
+                        bg, fg = "#C97D3D", "white"
+                    else:
+                        bg, fg = "#E3D9C2", "#3A2E1F"
+                    nome = (label.replace("[S] [NP] ","").replace("[C] [NP] ","")
+                                 .replace("[C] [USCITA] ","").replace("[S] ","")
+                                 .replace("[C] ","").strip())
+                    return (f'<span style="background:{bg};color:{fg};border-radius:8px;'
+                            f'padding:3px 10px;font-weight:700;font-size:0.9em;">{nome}</span>')
+
+                cards_html = ""
+                for ora_c, grp in tabella_df.groupby("Ora", sort=False):
+                    righe_html = ""
+                    for _, r in grp.iterrows():
+                        badge = _badge_sostituto(r["Sostituzione"])
+                        righe_html += (
+                            f'<div style="display:flex;justify-content:space-between;'
+                            f'align-items:center;padding:8px 0;border-bottom:1px solid #EFE6D3;">'
+                            f'<div><span style="font-weight:700;color:#3A2E1F;">Cl. {r["Classe"]}</span>'
+                            f'<span style="color:#9C5F2C;font-size:0.85em;margin-left:6px;">ass. {r["Assente"]}</span></div>'
+                            f'<div>{badge}</div></div>'
+                        )
+                    cards_html += (
+                        f'<div style="background:#FBF4E6;border:1.5px solid #E3D9C2;border-radius:14px;'
+                        f'padding:12px 14px;margin-bottom:10px;">'
+                        f'<div style="font-size:1em;font-weight:800;color:#C97D3D;margin-bottom:4px;">'
+                        f'🕐 {ora_c} ora</div>{righe_html}</div>'
+                    )
+                st.markdown(cards_html, unsafe_allow_html=True)
 
                 # --- VISTA TESTUALE ---
                 st.subheader("📝 Sostituzioni in formato testo (mobile/copincolla)")
@@ -1098,7 +1288,7 @@ elif menu == "Visualizza Orario":
 
 # --- STATISTICHE ---
 elif menu == "Statistiche":
-    st.header("📊 Statistiche Sostituzioni")
+    st.header("📊 Statistiche")
     with st.spinner('Caricamento statistiche...'):
         df_storico, df_assenze = carica_statistiche()
 
