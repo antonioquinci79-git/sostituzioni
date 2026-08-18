@@ -58,7 +58,7 @@ html, body, [class*="css"] {
    le do uno sfondo pieno coerente col tema, così non sembra che tagli
    l'intestazione quando ci passa sopra. */
 header[data-testid="stHeader"] {
-    background: var(--dc-crema-chiaro, #FBF4E6);
+    background: #FFFFFF;
 }
 
 /* Contenitore dell'intestazione SVG: la stacca dallo sfondo con
