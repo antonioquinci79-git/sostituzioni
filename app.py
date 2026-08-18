@@ -584,39 +584,43 @@ def vista_pivot_docenti(df, mode="docenti"):
 # AVVIO APP
 # =========================
 def mostra_intestazione():
-    col_banner, col_ricarica = st.columns([9, 1])
-    with col_banner:
-        st.markdown(
-            f"""
+    st.markdown(
+        f"""
 <div style="
-    display:flex; align-items:center; gap:14px;
+    display:flex; align-items:center; justify-content:space-between; gap:14px;
     background:linear-gradient(135deg, #EFE6D3, #FBF4E6);
     border:1.5px solid #E3D9C2; border-radius:16px;
     padding:14px 18px; margin-bottom:0.8rem;
     box-shadow:0 3px 10px rgba(58,46,31,0.12);
 ">
-  <div style="font-size:2.1em; line-height:1;">🏫</div>
-  <div>
-    <div style="font-size:1.35em; font-weight:800; color:#3A2E1F; line-height:1.15;">
-      {PLESSO_NAME}
-    </div>
-    <div style="font-size:0.95em; color:#9C5F2C; font-weight:600;">
-      Gestione sostituzioni docenti
+  <div style="display:flex; align-items:center; gap:14px;">
+    <div style="font-size:2.1em; line-height:1;">🏫</div>
+    <div>
+      <div style="font-size:1.35em; font-weight:800; color:#3A2E1F; line-height:1.15;">
+        {PLESSO_NAME}
+      </div>
+      <div style="font-size:0.95em; color:#9C5F2C; font-weight:600;">
+        Gestione sostituzioni docenti
+      </div>
     </div>
   </div>
+  <a href="?ricarica=1" target="_self" title="Ricarica dati da Google Sheets" style="
+    font-size:1.5em; line-height:1; text-decoration:none;
+    color:#C97D3D; flex-shrink:0;
+  ">🔄</a>
 </div>
 """,
-            unsafe_allow_html=True,
-        )
-    with col_ricarica:
-        st.write("")
-        st.write("")
-        if st.button("🔄", help="Ricarica dati da Google Sheets", key="btn_ricarica_header"):
-            carica_orario.clear()
-            carica_statistiche.clear()
-            st.rerun()
+        unsafe_allow_html=True,
+    )
 
 mostra_intestazione()
+
+# Gestione ricarica via query param
+if st.query_params.get("ricarica") == "1":
+    carica_orario.clear()
+    carica_statistiche.clear()
+    st.query_params.clear()
+    st.rerun()
 
 # assicurati che i fogli esistano con le intestazioni
 try:
