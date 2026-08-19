@@ -10,6 +10,15 @@ from google.oauth2.service_account import Credentials
 from datetime import datetime
 
 # =========================
+# VERSIONE APP
+# =========================
+# Aggiorna questo numero ad ogni modifica che carichi su entrambi i
+# deployment (Centrale e Castaldi): comparirà in piccolo nell'intestazione,
+# così puoi verificare a colpo d'occhio che l'aggiornamento sia arrivato
+# davvero su ciascuna delle due app (anche dopo un semplice "Reboot").
+APP_VERSION = "2.1"
+
+# =========================
 # STILI PERSONALIZZATI
 # =========================
 # Nota: i colori, il raggio degli angoli e i font sono ora gestiti dal tema
@@ -630,10 +639,13 @@ def mostra_intestazione():
       </div>
     </div>
   </div>
-  <a href="?ricarica=1" target="_self" title="Ricarica dati da Google Sheets" style="
-    font-size:1.5em; line-height:1; text-decoration:none;
-    color:#C97D3D; flex-shrink:0;
-  ">🔄</a>
+  <div style="display:flex; flex-direction:column; align-items:center; gap:2px; flex-shrink:0;">
+    <a href="?ricarica=1" target="_self" title="Ricarica dati da Google Sheets" style="
+      font-size:1.5em; line-height:1; text-decoration:none;
+      color:#C97D3D;
+    ">🔄</a>
+    <span style="font-size:0.7em; color:#B0A090; font-weight:600;">v{APP_VERSION}</span>
+  </div>
 </div>
 """,
         unsafe_allow_html=True,
