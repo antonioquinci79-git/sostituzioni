@@ -23,3 +23,5 @@ greenColor = "#6B8F71"
 orangeColor = "#C9933D"
 redColor = "#A3432D"
 blueColor = "#5E7A93"
+
+enableStaticServing = true
