@@ -4,6 +4,7 @@ import re
 import io
 import json
 import zipfile
+import html as html_lib
 import gspread
 import gspread_dataframe as gd
 from google.oauth2.service_account import Credentials
@@ -16,7 +17,7 @@ from datetime import datetime
 # deployment (Centrale e Castaldi): comparirà in piccolo nell'intestazione,
 # così puoi verificare a colpo d'occhio che l'aggiornamento sia arrivato
 # davvero su ciascuna delle due app (anche dopo un semplice "Reboot").
-APP_VERSION = "2.1"
+APP_VERSION = "2.2"
 
 # =========================
 # CONFIGURAZIONE FILE / SHEETS
@@ -537,6 +538,126 @@ def download_orario(df):
             file_name="orario.csv",
             mime="text/csv"
         )
+
+def genera_html_stampa_sostituzioni(plesso_nome, data_sost, giorno_assente, tabella_df):
+    """Costruisce una pagina HTML autonoma (stile "avviso in bacheca"), pensata
+    per la stampa o il salvataggio come PDF dal dialogo di stampa del browser.
+    Font grande, poco colore (risparmio inchiostro), leggibile anche fotocopiata."""
+    data_leggibile = data_sost.strftime("%d/%m/%Y")
+    titolo_giorno = f"{giorno_assente} {data_leggibile}"
+
+    righe_html = ""
+    ordine_ore = ORE_LEZIONE
+    tabella_ordinata = tabella_df.copy()
+    tabella_ordinata["Ora"] = pd.Categorical(tabella_ordinata["Ora"], categories=ordine_ore, ordered=True)
+    tabella_ordinata = tabella_ordinata.sort_values(["Ora", "Classe"])
+
+    for _, r in tabella_ordinata.iterrows():
+        ora = html_lib.escape(str(r["Ora"]))
+        classe = html_lib.escape(str(r["Classe"]))
+        assente = html_lib.escape(str(r["Assente"]))
+        sost_raw = str(r["Sostituzione"])
+        sost_pulito = (sost_raw.replace("[S] [NP] ", "").replace("[C] [NP] ", "")
+                                .replace("[C] [USCITA] ", "").replace("[S] ", "")
+                                .replace("[C] ", "").strip())
+        if sost_pulito in ("Nessuno", "", "—"):
+            sost_pulito = "— DA COPRIRE —"
+        sostituto = html_lib.escape(sost_pulito)
+        riga_scoperta = ' class="scoperta"' if sost_pulito == "— DA COPRIRE —" else ""
+        righe_html += (
+            f"<tr{riga_scoperta}><td>{ora}</td><td>{classe}</td>"
+            f"<td>{assente}</td><td>{sostituto}</td></tr>\n"
+        )
+
+    return f"""<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Sostituzioni {html_lib.escape(titolo_giorno)} — {html_lib.escape(plesso_nome)}</title>
+<style>
+  @page {{ margin: 1.5cm; }}
+  body {{
+    font-family: Georgia, 'Times New Roman', serif;
+    color: #1a1a1a;
+    margin: 0;
+    padding: 0 0.5cm;
+  }}
+  h1 {{
+    font-size: 1.5em;
+    margin: 0 0 0.1em 0;
+    border-bottom: 3px solid #C97D3D;
+    padding-bottom: 0.2em;
+  }}
+  .sottotitolo {{
+    font-size: 1.15em;
+    color: #444;
+    margin: 0 0 0.9em 0;
+  }}
+  table {{
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 1.05em;
+  }}
+  th, td {{
+    border: 1px solid #999;
+    padding: 8px 10px;
+    text-align: left;
+  }}
+  th {{
+    background: #EFE6D3;
+    font-size: 0.95em;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }}
+  tr.scoperta td {{
+    font-weight: bold;
+  }}
+  .piepagina {{
+    margin-top: 1.2em;
+    font-size: 0.8em;
+    color: #777;
+  }}
+  @media print {{
+    .no-print {{ display: none; }}
+  }}
+</style>
+</head>
+<body>
+  <h1>📚 Sostituzioni — {html_lib.escape(plesso_nome)}</h1>
+  <p class="sottotitolo">{html_lib.escape(titolo_giorno)}</p>
+  <table>
+    <thead>
+      <tr><th>Ora</th><th>Classe</th><th>Assente</th><th>Sostituzione</th></tr>
+    </thead>
+    <tbody>
+      {righe_html if righe_html else '<tr><td colspan="4">Nessuna sostituzione da mostrare.</td></tr>'}
+    </tbody>
+  </table>
+  <p class="piepagina">Generato automaticamente il {datetime.now().strftime('%d/%m/%Y alle %H:%M')}.</p>
+</body>
+</html>"""
+
+def pulsante_stampa_sostituzioni(plesso_nome, data_sost, giorno_assente, tabella_df):
+    """Bottone che apre una finestra con il riepilogo pronto per la stampa/PDF
+    (usa il dialogo di stampa del browser: da lì si può scegliere una stampante
+    fisica oppure "Salva come PDF")."""
+    pagina_html = genera_html_stampa_sostituzioni(plesso_nome, data_sost, giorno_assente, tabella_df)
+    pagina_json = json.dumps(pagina_html)
+    st.components.v1.html(f"""
+<button id="stampa-sostituzioni-btn" style="
+    width:100%; padding:0.7em; font-size:1em; font-weight:bold;
+    background:#3A2E1F; color:white; border:none; border-radius:10px; cursor:pointer;
+">🖨️ Stampa / PDF per la bacheca</button>
+<script>
+document.getElementById('stampa-sostituzioni-btn').addEventListener('click', function() {{
+    var finestra = window.open('', '_blank');
+    finestra.document.write({pagina_json});
+    finestra.document.close();
+    finestra.focus();
+    setTimeout(function() {{ finestra.print(); }}, 300);
+}});
+</script>
+""", height=55)
 
 def vista_pivot_docenti(df, mode="docenti"):
     # Copiato e adattato da app.py per mantenere la stessa UX
@@ -1206,6 +1327,14 @@ document.getElementById('copia-sostituzioni-btn').addEventListener('click', func
 }});
 </script>
 """, height=55)
+
+                # --- Riepilogo stampabile / PDF per la bacheca (v2.2) ---
+                st.subheader("🖨️ Riepilogo per la bacheca")
+                st.caption(
+                    "Apre una finestra pronta per la stampa. Dal dialogo di stampa del "
+                    "browser puoi scegliere una stampante fisica oppure \"Salva come PDF\"."
+                )
+                pulsante_stampa_sostituzioni(PLESSO_NAME, data_sostituzione, giorno_assente, tabella_df)
 
                 # --- Step 1: conferma (controllo conflitti) ---
                 if st.button("✅ Conferma tabella (non salva ancora)", type="primary"):
