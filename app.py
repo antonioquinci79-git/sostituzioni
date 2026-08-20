@@ -8,7 +8,6 @@ import gspread
 import gspread_dataframe as gd
 from google.oauth2.service_account import Credentials
 from datetime import datetime
-import os
 
 # =========================
 # VERSIONE APP
@@ -17,7 +16,7 @@ import os
 # deployment (Centrale e Castaldi): comparirà in piccolo nell'intestazione,
 # così puoi verificare a colpo d'occhio che l'aggiornamento sia arrivato
 # davvero su ciascuna delle due app (anche dopo un semplice "Reboot").
-APP_VERSION = "2.2"
+APP_VERSION = "2.1"
 
 # =========================
 # CONFIGURAZIONE FILE / SHEETS
@@ -35,10 +34,6 @@ TIPI_LEZIONE        = ["Lezione", "Sostegno", "Altro"]
 # Aggiungi in Settings → Secrets di ciascun deployment su Streamlit Cloud:
 #   spreadsheet_name = "OrarioSostituzioni_Centrale"   (oppure _Castaldi)
 #   plesso_name      = "Plesso Centrale"               (oppure Castaldi)
-#
-# NOTA: questo blocco è stato spostato qui sopra (prima era più in basso)
-# perché PLESSO_NAME serve già per configurare il titolo della scheda del
-# browser, l'icona e il manifest per "Aggiungi a Home" (v2.2).
 try:
     SPREADSHEET_NAME = st.secrets["app"]["spreadsheet_name"]
     PLESSO_NAME      = st.secrets["app"]["plesso_name"]
@@ -49,64 +44,6 @@ except KeyError:
         "plesso_name = \"Plesso Centrale\"\n```"
     )
     st.stop()
-
-# =========================
-# ICONA HOME SCHERMATA (PWA) — v2.2
-# =========================
-# Permette di "Aggiungere a Home" l'app da Safari/Chrome su telefono, così si
-# apre a schermo intero con una propria icona, come un'app installata.
-#
-# Requisiti nel repository (stessa cartella di app.py):
-#   1. Una cartella "static/" con dentro:
-#      icon-192.png, icon-512.png, icon-maskable-512.png, apple-touch-icon.png
-#   2. Nel file .streamlit/config.toml, sotto la sezione [server]:
-#      enableStaticServing = true
-# Il manifest.json viene invece generato automaticamente qui sotto ad ogni
-# avvio, con il nome del plesso corretto per ciascun deployment.
-STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
-
-
-def scrivi_manifest_pwa():
-    """Crea/aggiorna static/manifest.json con il nome del plesso corrente."""
-    manifest = {
-        "name": f"Sostituzioni – {PLESSO_NAME}",
-        "short_name": "Sostituzioni",
-        "start_url": ".",
-        "display": "standalone",
-        "background_color": "#F7F1E6",
-        "theme_color": "#C97D3D",
-        "icons": [
-            {"src": "icon-192.png", "sizes": "192x192", "type": "image/png"},
-            {"src": "icon-512.png", "sizes": "512x512", "type": "image/png"},
-            {"src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
-        ],
-    }
-    try:
-        os.makedirs(STATIC_DIR, exist_ok=True)
-        with open(os.path.join(STATIC_DIR, "manifest.json"), "w", encoding="utf-8") as f:
-            json.dump(manifest, f, ensure_ascii=False, indent=2)
-    except OSError:
-        pass  # cartella non scrivibile: se il manifest è già nel repo, resta comunque valido
-
-
-scrivi_manifest_pwa()
-
-st.set_page_config(
-    page_title=f"Sostituzioni – {PLESSO_NAME}",
-    page_icon=os.path.join(STATIC_DIR, "icon-192.png"),
-)
-
-st.markdown(
-    """
-<link rel="manifest" href="app/static/manifest.json">
-<meta name="theme-color" content="#C97D3D">
-<link rel="apple-touch-icon" href="app/static/apple-touch-icon.png">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Sostituzioni">
-""",
-    unsafe_allow_html=True,
-)
 
 # =========================
 # STILI PERSONALIZZATI
