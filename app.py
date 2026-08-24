@@ -1201,7 +1201,7 @@ elif menu == "Gestione Assenze":
                 st.markdown(cards_html, unsafe_allow_html=True)
 
                 st.subheader("📝 Sostituzioni in formato testo (mobile/copincolla)")
-                testo_output = "Buongiorno, supplenze:\n\n"
+                testo_output = "Buongiorno, supplenze.©\n\n"
 
                 for ora, gruppo in sostituzioni_df.groupby("Ora"):
                     if not gruppo.empty:
