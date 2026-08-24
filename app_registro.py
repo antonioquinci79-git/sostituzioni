@@ -5,6 +5,7 @@ import io
 import json
 import zipfile
 import html as html_lib
+import urllib.parse
 import gspread
 import gspread_dataframe as gd
 from google.oauth2.service_account import Credentials
@@ -13,11 +14,7 @@ from datetime import datetime
 # =========================
 # VERSIONE APP
 # =========================
-# Aggiorna questo numero ad ogni modifica che carichi su entrambi i
-# deployment (Centrale e Castaldi): comparirà in piccolo nell'intestazione,
-# così puoi verificare a colpo d'occhio che l'aggiornamento sia arrivato
-# davvero su ciascuna delle due app (anche dopo un semplice "Reboot").
-APP_VERSION = "2.2"
+APP_VERSION = "2.5"
 
 # =========================
 # CONFIGURAZIONE FILE / SHEETS
@@ -30,11 +27,6 @@ GIORNI_SETTIMANA    = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerd�
 ORE_LEZIONE         = ["I", "II", "III", "IV", "V", "VI"]
 TIPI_LEZIONE        = ["Lezione", "Sostegno", "Altro"]
 
-# Il nome dello spreadsheet e il nome del plesso vengono letti dai secrets,
-# così lo stesso app.py può essere deployato due volte puntando a fogli diversi.
-# Aggiungi in Settings → Secrets di ciascun deployment su Streamlit Cloud:
-#   spreadsheet_name = "OrarioSostituzioni_Centrale"   (oppure _Castaldi)
-#   plesso_name      = "Plesso Centrale"               (oppure Castaldi)
 try:
     SPREADSHEET_NAME = st.secrets["app"]["spreadsheet_name"]
     PLESSO_NAME      = st.secrets["app"]["plesso_name"]
@@ -42,23 +34,15 @@ except KeyError:
     st.error(
         "Configurazione mancante nei secrets. Aggiungi in Settings → Secrets:\n\n"
         "```\n[app]\nspreadsheet_name = \"OrarioSostituzioni_Centrale\"\n"
-        "plesso_name = \"Plesso Centrale\"\n```"
+        "plesso_name      = \"Plesso Centrale\"\n```"
     )
     st.stop()
 
 # =========================
 # STILI PERSONALIZZATI
 # =========================
-# Nota: i colori, il raggio degli angoli e i font sono ora gestiti dal tema
-# nativo in .streamlit/config.toml (Direzione A "Diario di classe"). Qui resta
-# solo ciò che il tema non gestisce: misure per il tocco su mobile e un
-# piccolo tocco decorativo sui titoli.
 st.markdown("""
 <style>
-/* =========================================================
-   PALETTE "Diario di classe": stessi colori già usati nelle
-   card di Statistiche, riportati anche su bottoni e header.
-   ========================================================= */
 :root {
     --dc-marrone-scuro: #3A2E1F;
     --dc-marrone: #9C5F2C;
@@ -68,39 +52,20 @@ st.markdown("""
     --dc-bordo: #E3D9C2;
 }
 
-/* Font di base più grande su tutta l'app (specialmente utile su mobile,
-   dove il default Streamlit è spesso troppo piccolo per essere letto
-   comodamente in piedi/di fretta, come capita spesso a scuola) */
 html, body, [class*="css"] {
     font-size: 17px;
 }
 
-/* Margini orizzontali per respirare su mobile */
 .block-container {
     padding-left: 1rem;
     padding-right: 1rem;
-    /* Più spazio sopra: 1rem non basta a scendere sotto la toolbar fissa
-       di Streamlit (☰ / Deploy), che ha altezza variabile a seconda del
-       browser. Su Mac/mobile questo faceva "tagliare" la parte alta
-       dell'intestazione, coperta dalla toolbar. Aggiungo anche
-       env(safe-area-inset-top) per rispettare notch/barre dinamiche
-       dei browser mobili (iOS Safari, ecc.). */
     padding-top: calc(3.2rem + env(safe-area-inset-top, 0px));
 }
 
-/* La toolbar di Streamlit resta semi-trasparente per default e può
-   "fondersi" visivamente col contenuto sottostante durante lo scroll:
-   le do uno sfondo pieno coerente col tema, così non sembra che tagli
-   l'intestazione quando ci passa sopra. */
 header[data-testid="stHeader"] {
     background: #FFFFFF;
 }
 
-/* Contenitore dell'intestazione SVG: la stacca dallo sfondo con
-   ombra e angoli arrotondati invece di restare "incollata" in alto.
-   height:auto + object-fit:contain evitano che l'immagine venga
-   ritagliata quando il rapporto larghezza/altezza cambia su schermi
-   stretti (mobile) o nella finestra ridimensionata (Mac). */
 .block-container > div:first-child img[alt] {
     width: 100% !important;
     height: auto !important;
@@ -112,10 +77,6 @@ header[data-testid="stHeader"] {
     margin-bottom: 0.6rem;
 }
 
-/* =========================================================
-   BOTTONI: più grandi, colorati, con ombra — pensati per il
-   tocco col pollice su mobile (min-height ~48px consigliati)
-   ========================================================= */
 .stButton button {
     width: 100%;
     min-height: 3em;
@@ -135,8 +96,6 @@ header[data-testid="stHeader"] {
 .stButton button:active {
     transform: scale(0.98);
 }
-/* Bottoni secondari (type="secondary", quelli di default senza type="primary")
-   restano riconoscibili ma meno "urgenti" alla vista */
 .stButton button[kind="secondary"] {
     background: var(--dc-crema-chiaro);
     color: var(--dc-marrone-scuro);
@@ -144,10 +103,6 @@ header[data-testid="stHeader"] {
     box-shadow: none;
 }
 
-/* =========================================================
-   MENU DI NAVIGAZIONE (st.segmented_control): il pezzo più
-   usato su mobile, va reso ben visibile e comodo da toccare
-   ========================================================= */
 [data-testid="stSegmentedControl"] {
     gap: 0.4rem;
 }
@@ -169,13 +124,11 @@ header[data-testid="stHeader"] {
     box-shadow: 0 3px 8px rgba(58, 46, 31, 0.25);
 }
 
-/* Tabelle: leggibili ma non enormi (restano dense per dati tabellari) */
 .stDataFrame, .stDataEditor {
     font-size: 0.95em !important;
     border-radius: 12px !important;
 }
 
-/* Input: allarga i selectbox e li rende più alti al tocco */
 .stSelectbox, .stTextInput, .stDateInput, .stMultiSelect {
     width: 100% !important;
 }
@@ -183,7 +136,6 @@ header[data-testid="stHeader"] {
     min-height: 2.6em;
 }
 
-/* Titoli di sezione: più grandi, spaziati, con la riga "diario di classe" */
 h1, h2 {
     color: var(--dc-marrone-scuro);
     border-bottom: 2px solid var(--dc-bordo);
@@ -194,7 +146,21 @@ h1 { font-size: 1.7em; }
 h2 { font-size: 1.4em; }
 h3 { font-size: 1.2em; color: var(--dc-marrone); }
 
-/* Su schermi molto stretti (telefoni), tutto ancora un filo più grande */
+.btn-whatsapp {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 0.8em;
+    background-color: #25D366;
+    color: white !important;
+    font-weight: bold;
+    text-decoration: none;
+    border-radius: 14px;
+    margin-top: 5px;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+}
+
 @media (max-width: 480px) {
     html, body, [class*="css"] { font-size: 18px; }
     .stButton button { font-size: 1.15em; padding: 1em; }
@@ -212,8 +178,6 @@ SCOPE = [
     'https://www.googleapis.com/auth/spreadsheets'
 ]
 
-
-
 @st.cache_resource(show_spinner=False)
 def get_gdrive_client():
     gdrive_credentials = st.secrets["gdrive"]
@@ -223,22 +187,14 @@ def get_gdrive_client():
 
 @st.cache_resource(show_spinner=False)
 def get_spreadsheet():
-    """Apre (o crea) lo spreadsheet UNA SOLA VOLTA per la vita dell'app
-    (cache_resource), invece di rifare la ricerca per nome ad ogni rerun."""
     client = get_gdrive_client()
     try:
         return client.open(SPREADSHEET_NAME)
     except gspread.SpreadsheetNotFound:
-        # Creazione: l'utente dovrà eventualmente condividere il foglio
-        # con l'email del service account se vuole accedervi anche da browser.
         return client.create(SPREADSHEET_NAME)
 
 @st.cache_resource(show_spinner=False)
 def get_worksheet(sheet_name: str):
-    """Restituisce l'handle del worksheet, creandolo con l'header corretto
-    se non esiste. Cachato: una volta risolto l'handle, i rerun successivi
-    non fanno più alcuna chiamata 'metadata' a Google, solo letture/scritture
-    sui valori quando effettivamente richieste."""
     headers_by_sheet = {
         ORARIO_SHEET: REQUIRED_COLUMNS,
         STORICO_SHEET: ["data", "giorno", "docente", "ore"],
@@ -253,13 +209,7 @@ def get_worksheet(sheet_name: str):
         gd.set_with_dataframe(ws, header_df, include_index=False, include_column_header=True)
         return ws
 
-# =========================
-# INIZIALIZZAZIONE FOGLI (se mancanti creali con header corretti)
-# =========================
 def ensure_sheets_exist():
-    """Pre-carica gli handle dei worksheet. Grazie al cache_resource su
-    get_worksheet, dal secondo rerun in poi questa funzione non genera
-    alcuna chiamata di rete."""
     for nome_foglio in (ORARIO_SHEET, STORICO_SHEET, ASSENZE_SHEET):
         get_worksheet(nome_foglio)
 
@@ -271,23 +221,17 @@ def carica_orario():
     try:
         ws = get_worksheet(ORARIO_SHEET)
         df = gd.get_as_dataframe(ws, evaluate_formulas=True, header=0)
-        # rimuovo colonne totalmente vuote
         df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
-        # riempio eventuali colonne mancanti con default
         for col in REQUIRED_COLUMNS:
             if col not in df.columns:
                 df[col] = ""
-        # drop rows completamente vuote
         df = df.dropna(how='all').copy()
-        # normalizzazione tipi
         if "Escludi" in df.columns:
-            # Google Sheets può portare True/False o stringhe
             df["Escludi"] = df["Escludi"].replace({pd.NA: False, "": False}).astype(bool)
         else:
             df["Escludi"] = False
         for col in ["Tipo", "Docente", "Giorno", "Ora", "Classe"]:
             df[col] = df[col].astype(str).str.strip().fillna("")
-        # mantieni solo le colonne richieste
         df = df.loc[:, REQUIRED_COLUMNS]
         return df
     except Exception as e:
@@ -297,21 +241,20 @@ def carica_orario():
 def salva_orario(df):
     try:
         ws = get_worksheet(ORARIO_SHEET)
-        # assicurati che le colonne siano quelle giuste e in ordine
         df_to_save = df.copy()
         for col in REQUIRED_COLUMNS:
             if col not in df_to_save.columns:
                 df_to_save[col] = ""
         df_to_save = df_to_save[REQUIRED_COLUMNS]
         gd.set_with_dataframe(ws, df_to_save, include_index=False, include_column_header=True)
-        carica_orario.clear()  # invalida la cache: i dati appena salvati saranno subito visibili
+        carica_orario.clear()
         return True
     except Exception as e:
         st.error(f"Errore nel salvataggio dell'orario su Google Sheets: {e}")
         return False
 
 # =========================
-# CARICAMENTO / SALVATAGGIO STATISTICHE (storico + assenze)
+# CARICAMENTO / SALVATAGGIO STATISTICHE
 # =========================
 @st.cache_data(ttl=300, show_spinner=False)
 def carica_statistiche():
@@ -320,26 +263,23 @@ def carica_statistiche():
         ws_assenze = get_worksheet(ASSENZE_SHEET)
         df_storico = gd.get_as_dataframe(ws_storico, header=0).dropna(how='all')
         df_assenze = gd.get_as_dataframe(ws_assenze, header=0).dropna(how='all')
-        # Normalizza nomi e tipi
+        
         if not df_storico.empty:
             if "data" in df_storico.columns:
-                df_storico["data"] = pd.to_datetime(df_storico["data"], errors="coerce")
-                df_storico["data"] = df_storico["data"].dt.strftime("%Y-%m-%d")
-
+                df_storico["data"] = pd.to_datetime(df_storico["data"], errors="coerce").dt.strftime("%Y-%m-%d")
             if "ore" in df_storico.columns:
                 df_storico["ore"] = pd.to_numeric(df_storico["ore"], errors="coerce").fillna(0).astype(int)
-
             for c in ["docente", "giorno"]:
                 if c in df_storico.columns:
                     df_storico[c] = df_storico[c].astype(str).str.strip().str.lower()
+                    
         if not df_assenze.empty:
             if "data" in df_assenze.columns:
-                df_assenze["data"] = pd.to_datetime(df_assenze["data"], errors="coerce")
-                df_assenze["data"] = df_assenze["data"].dt.strftime("%Y-%m-%d")
+                df_assenze["data"] = pd.to_datetime(df_assenze["data"], errors="coerce").dt.strftime("%Y-%m-%d")
             for c in ["docente", "giorno", "ora", "classe"]:
                 if c in df_assenze.columns:
                     df_assenze[c] = df_assenze[c].astype(str).str.strip()
-        # Se i fogli sono vuoti, restituisci DataFrame con le colonne attese
+                    
         if df_storico.empty:
             df_storico = pd.DataFrame(columns=["data", "giorno", "docente", "ore"])
         if df_assenze.empty:
@@ -349,29 +289,23 @@ def carica_statistiche():
         st.error(f"Errore nel caricamento delle statistiche da Google Sheets: {e}")
         return pd.DataFrame(columns=["data", "giorno", "docente", "ore"]), pd.DataFrame(columns=["data", "giorno", "docente", "ora", "classe"])
 
-
 def salva_storico_assenze(data_sostituzione, giorno_assente, sostituzioni_df, ore_assenti):
+    """Salvataggio coordinato ed esplicito su Google Sheets."""
     try:
         ws_storico = get_worksheet(STORICO_SHEET)
         ws_assenze = get_worksheet(ASSENZE_SHEET)
 
-        # Filtra solo le sostituzioni effettive (esclude "Nessuno")
         sostituzioni_effettive = sostituzioni_df[
             sostituzioni_df["Sostituto"].notna() &
             (sostituzioni_df["Sostituto"].str.strip() != "") &
             (sostituzioni_df["Sostituto"].str.strip().str.lower() != "nessuno")
         ].copy()
 
-        # Prepara i dati per lo storico: ogni sostituzione effettiva vale 1 ora
         storico_data = [
             [str(data_sostituzione), giorno_assente, row["Sostituto"], 1]
             for _, row in sostituzioni_effettive.iterrows()
         ]
 
-        if storico_data:
-            ws_storico.append_rows(storico_data, value_input_option="USER_ENTERED")
-
-        # Filtra le assenze effettive: includi solo le ore dove il docente è stato effettivamente sostituito
         ore_effettivamente_assenti = ore_assenti[
             ore_assenti["Ora"].isin(sostituzioni_effettive["Ora"])
         ].copy()
@@ -381,13 +315,15 @@ def salva_storico_assenze(data_sostituzione, giorno_assente, sostituzioni_df, or
             for _, row in ore_effettivamente_assenti.iterrows()
         ]
 
+        if storico_data:
+            ws_storico.append_rows(storico_data, value_input_option="USER_ENTERED")
         if assenze_data:
             ws_assenze.append_rows(assenze_data, value_input_option="USER_ENTERED")
 
-        carica_statistiche.clear()  # invalida la cache: storico/assenze aggiornati saranno subito visibili
+        carica_statistiche.clear()
         return True
     except Exception as e:
-        st.error(f"Errore nel salvataggio dei dati su Google Sheets: {e}")
+        st.error(f"Errore durante il salvataggio dei dati su Google Sheets: {e}")
         return False
 
 def clear_sheet_content(sheet_name):
@@ -408,8 +344,6 @@ def clear_sheet_content(sheet_name):
         return False
 
 def archivia_anno_scolastico(anno: str):
-    """Copia storico e assenze in fogli archivio_storico_ANNO e archivio_assenze_ANNO,
-    poi svuota i fogli attivi pronti per il nuovo anno."""
     try:
         sh = get_spreadsheet()
         suffisso = anno.replace("/", "-")
@@ -419,7 +353,6 @@ def archivia_anno_scolastico(anno: str):
         }
 
         for sheet_src, nome_dest in nomi_archivio.items():
-            # Controlla che il foglio archivio non esista già
             try:
                 sh.worksheet(nome_dest)
                 st.error(f"Esiste già un archivio per l'anno {anno} ({nome_dest}). Scegli un anno diverso.")
@@ -427,16 +360,12 @@ def archivia_anno_scolastico(anno: str):
             except gspread.WorksheetNotFound:
                 pass
 
-            # Leggi dati attivi
             ws_src = get_worksheet(sheet_src)
-            dati = ws_src.get_all_values()  # lista di liste inclusa intestazione
-
-            # Crea foglio archivio e scrivi dati
+            dati = ws_src.get_all_values()
             ws_dest = sh.add_worksheet(title=nome_dest, rows=max(len(dati) + 10, 50), cols=10)
             if dati:
                 ws_dest.update(values=dati, value_input_option="USER_ENTERED")
 
-        # Svuota i fogli attivi
         clear_sheet_content(STORICO_SHEET)
         clear_sheet_content(ASSENZE_SHEET)
         carica_statistiche.clear()
@@ -446,43 +375,64 @@ def archivia_anno_scolastico(anno: str):
         return False
 
 # =========================
-# FUNZIONE PER IL BACKUP CORRETTA
+# BACKUP ZIP ED EXPORT EXCEL (.xlsx)
 # =========================
 def create_backup():
     try:
-        # Esporta il foglio "orario" in CSV
         ws_orario = get_worksheet(ORARIO_SHEET)
         df_orario = gd.get_as_dataframe(ws_orario, evaluate_formulas=True, header=0).dropna(how='all')
 
-        # Esporta il foglio "storico" in CSV
         ws_storico = get_worksheet(STORICO_SHEET)
         df_storico = gd.get_as_dataframe(ws_storico, evaluate_formulas=True, header=0).dropna(how='all')
 
-        # Esporta il foglio "assenze" in CSV
         ws_assenze = get_worksheet(ASSENZE_SHEET)
         df_assenze = gd.get_as_dataframe(ws_assenze, evaluate_formulas=True, header=0).dropna(how='all')
 
-        # Comprimi i DataFrame in un file ZIP in memoria
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
-            # Aggiungi i file CSV al buffer
             zip_file.writestr("orario.csv", df_orario.to_csv(index=False).encode('utf-8'))
             zip_file.writestr("storico.csv", df_storico.to_csv(index=False).encode('utf-8'))
             zip_file.writestr("assenze.csv", df_assenze.to_csv(index=False).encode('utf-8'))
 
-        # Restituisci il contenuto del file ZIP
         zip_buffer.seek(0)
         return zip_buffer
     except Exception as e:
         st.error(f"Errore durante la creazione del backup: {e}")
         return None
 
+def create_excel_export():
+    try:
+        ws_orario = get_worksheet(ORARIO_SHEET)
+        df_orario = gd.get_as_dataframe(ws_orario, evaluate_formulas=True, header=0).dropna(how='all')
+
+        ws_storico = get_worksheet(STORICO_SHEET)
+        df_storico = gd.get_as_dataframe(ws_storico, evaluate_formulas=True, header=0).dropna(how='all')
+
+        ws_assenze = get_worksheet(ASSENZE_SHEET)
+        df_assenze = gd.get_as_dataframe(ws_assenze, evaluate_formulas=True, header=0).dropna(how='all')
+
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            df_orario.to_excel(writer, sheet_name='Orario', index=False)
+            df_storico.to_excel(writer, sheet_name='Storico Sostituzioni', index=False)
+            df_assenze.to_excel(writer, sheet_name='Storico Assenze', index=False)
+            
+            for sheet_name, df_sheet in [('Orario', df_orario), ('Storico Sostituzioni', df_storico), ('Storico Assenze', df_assenze)]:
+                worksheet = writer.sheets[sheet_name]
+                for idx, col in enumerate(df_sheet.columns):
+                    max_len = max(df_sheet[col].astype(str).map(len).max() if not df_sheet.empty else 0, len(str(col))) + 3
+                    worksheet.set_column(idx, idx, max_len)
+                    
+        output.seek(0)
+        return output
+    except Exception as e:
+        st.error(f"Errore durante la generazione dell'Excel: {e}")
+        return None
+
 # =========================
-# UTILITA' PER DOWNLOAD e PIVOT
+# UTILITA' PER DOWNLOAD E PIVOT
 # =========================
 def build_docente_tipo_map(df):
-    """Precalcola una mappa {docente: tipo} una sola volta, invece di
-    rifare un filtro su orario_df per ogni docente dentro i loop."""
     if df.empty:
         return {}
     tmp = df[df["Tipo"].astype(str).str.strip() != ""]
@@ -491,42 +441,30 @@ def build_docente_tipo_map(df):
     return tmp.groupby("Docente")["Tipo"].first().to_dict()
 
 def trova_conflitti_orario(df):
-    """Ritorna le combinazioni (Docente, Giorno, Ora) che compaiono più di
-    una volta in df, cioè un docente assegnato a due classi nella stessa ora."""
     if df.empty:
         return []
     conteggi = df.groupby(["Docente", "Giorno", "Ora"]).size()
     return [idx for idx, n in conteggi.items() if n > 1 and idx[0].strip() != ""]
 
 def _colore_tipo(label):
-    """Restituisce (bg, fg, icona) in base al tipo di sostituto nel label."""
     if "[S]" in label and "[NP]" not in label:
-        return "#6B8F71", "white", "●"
+        return "#6B8F71", "white", "🔵"
     elif "[C] [USCITA]" in label:
-        return "#5E7A93", "white", "✈"
+        return "#5E7A93", "white", "🟡"
     elif "[NP]" in label:
-        return "#9C9C7A", "white", "○"
+        return "#9C9C7A", "white", "🟢"
     elif "[C]" in label:
-        return "#C97D3D", "white", "●"
+        return "#C97D3D", "white", "🔴"
     return "#E3D9C2", "#3A2E1F", "–"
 
 def _badge_sostituto(label):
-    """Restituisce HTML di un badge colorato con il nome pulito del sostituto."""
     if label == "Nessuno":
         return '<span style="color:#9C5F2C;font-style:italic;">— nessuno —</span>'
-    if "[S]" in label and "[NP]" not in label:
-        bg, fg = "#6B8F71", "white"
-    elif "[C] [USCITA]" in label:
-        bg, fg = "#5E7A93", "white"
-    elif "[NP]" in label:
-        bg, fg = "#9C9C7A", "white"
-    elif "[C]" in label:
-        bg, fg = "#C97D3D", "white"
-    else:
-        bg, fg = "#E3D9C2", "#3A2E1F"
+    bg, fg, _ = _colore_tipo(label)
     nome = (label.replace("[S] [NP] ", "").replace("[C] [NP] ", "")
                  .replace("[C] [USCITA] ", "").replace("[S] ", "")
-                 .replace("[C] ", "").strip())
+                 .replace("[C] ", "").replace("🔵 ", "").replace("🟡 ", "")
+                 .replace("🟢 ", "").replace("🔴 ", "").strip())
     return (f'<span style="background:{bg};color:{fg};border-radius:8px;'
             f'padding:3px 10px;font-weight:700;font-size:0.9em;">{nome}</span>')
 
@@ -540,9 +478,6 @@ def download_orario(df):
         )
 
 def genera_html_stampa_sostituzioni(plesso_nome, data_sost, giorno_assente, tabella_df):
-    """Costruisce una pagina HTML autonoma (stile "avviso in bacheca"), pensata
-    per la stampa o il salvataggio come PDF dal dialogo di stampa del browser.
-    Font grande, poco colore (risparmio inchiostro), leggibile anche fotocopiata."""
     data_leggibile = data_sost.strftime("%d/%m/%Y")
     titolo_giorno = f"{giorno_assente} {data_leggibile}"
 
@@ -559,7 +494,8 @@ def genera_html_stampa_sostituzioni(plesso_nome, data_sost, giorno_assente, tabe
         sost_raw = str(r["Sostituzione"])
         sost_pulito = (sost_raw.replace("[S] [NP] ", "").replace("[C] [NP] ", "")
                                 .replace("[C] [USCITA] ", "").replace("[S] ", "")
-                                .replace("[C] ", "").strip())
+                                .replace("[C] ", "").replace("🔵 ", "").replace("🟡 ", "")
+                                .replace("🟢 ", "").replace("🔴 ", "").strip())
         if sost_pulito in ("Nessuno", "", "—"):
             sost_pulito = "— DA COPRIRE —"
         sostituto = html_lib.escape(sost_pulito)
@@ -576,50 +512,15 @@ def genera_html_stampa_sostituzioni(plesso_nome, data_sost, giorno_assente, tabe
 <title>Sostituzioni {html_lib.escape(titolo_giorno)} — {html_lib.escape(plesso_nome)}</title>
 <style>
   @page {{ margin: 1.5cm; }}
-  body {{
-    font-family: Georgia, 'Times New Roman', serif;
-    color: #1a1a1a;
-    margin: 0;
-    padding: 0 0.5cm;
-  }}
-  h1 {{
-    font-size: 1.5em;
-    margin: 0 0 0.1em 0;
-    border-bottom: 3px solid #C97D3D;
-    padding-bottom: 0.2em;
-  }}
-  .sottotitolo {{
-    font-size: 1.15em;
-    color: #444;
-    margin: 0 0 0.9em 0;
-  }}
-  table {{
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 1.05em;
-  }}
-  th, td {{
-    border: 1px solid #999;
-    padding: 8px 10px;
-    text-align: left;
-  }}
-  th {{
-    background: #EFE6D3;
-    font-size: 0.95em;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-  }}
-  tr.scoperta td {{
-    font-weight: bold;
-  }}
-  .piepagina {{
-    margin-top: 1.2em;
-    font-size: 0.8em;
-    color: #777;
-  }}
-  @media print {{
-    .no-print {{ display: none; }}
-  }}
+  body {{ font-family: Georgia, 'Times New Roman', serif; color: #1a1a1a; margin: 0; padding: 0 0.5cm; }}
+  h1 {{ font-size: 1.5em; margin: 0 0 0.1em 0; border-bottom: 3px solid #C97D3D; padding-bottom: 0.2em; }}
+  .sottotitolo {{ font-size: 1.15em; color: #444; margin: 0 0 0.9em 0; }}
+  table {{ width: 100%; border-collapse: collapse; font-size: 1.05em; }}
+  th, td {{ border: 1px solid #999; padding: 8px 10px; text-align: left; }}
+  th {{ background: #EFE6D3; font-size: 0.95em; text-transform: uppercase; letter-spacing: 0.03em; }}
+  tr.scoperta td {{ font-weight: bold; }}
+  .piepagina {{ margin-top: 1.2em; font-size: 0.8em; color: #777; }}
+  @media print {{ .no-print {{ display: none; }} }}
 </style>
 </head>
 <body>
@@ -638,9 +539,6 @@ def genera_html_stampa_sostituzioni(plesso_nome, data_sost, giorno_assente, tabe
 </html>"""
 
 def pulsante_stampa_sostituzioni(plesso_nome, data_sost, giorno_assente, tabella_df):
-    """Bottone che apre una finestra con il riepilogo pronto per la stampa/PDF
-    (usa il dialogo di stampa del browser: da lì si può scegliere una stampante
-    fisica oppure "Salva come PDF")."""
     pagina_html = genera_html_stampa_sostituzioni(plesso_nome, data_sost, giorno_assente, tabella_df)
     pagina_json = json.dumps(pagina_html)
     st.components.v1.html(f"""
@@ -660,7 +558,6 @@ document.getElementById('stampa-sostituzioni-btn').addEventListener('click', fun
 """, height=55)
 
 def vista_pivot_docenti(df, mode="docenti"):
-    # Copiato e adattato da app.py per mantenere la stessa UX
     if df.empty:
         st.warning("Nessun orario disponibile.")
         return
@@ -774,14 +671,12 @@ def mostra_intestazione():
 
 mostra_intestazione()
 
-# Gestione ricarica via query param
 if st.query_params.get("ricarica") == "1":
     carica_orario.clear()
     carica_statistiche.clear()
     st.query_params.clear()
     st.rerun()
 
-# assicurati che i fogli esistano con le intestazioni
 try:
     with st.spinner('Caricamento dati...'):
         ensure_sheets_exist()
@@ -792,7 +687,7 @@ with st.spinner('Caricamento orario...'):
     orario_df = carica_orario()
 
 # =========================
-# MENU PRINCIPALE (mobile-friendly)
+# MENU PRINCIPALE
 # =========================
 ETICHETTE_MENU = {
     "Inserisci/Modifica Orario": "📝 Orario",
@@ -810,8 +705,6 @@ menu_scelto_label = st.segmented_control(
 etichette_inverse = {v: k for k, v in ETICHETTE_MENU.items()}
 menu = etichette_inverse.get(menu_scelto_label)
 
-
-
 # --- INSERIMENTO/MODIFICA ORARIO ---
 if menu == "Inserisci/Modifica Orario":
     st.header("➕ Modifica orario")
@@ -819,8 +712,55 @@ if menu == "Inserisci/Modifica Orario":
     uploaded_file = st.file_uploader("Carica un nuovo orario (CSV)", type="csv")
     if uploaded_file:
         df_tmp = pd.read_csv(uploaded_file)
+        
+        # MAPPING GUIDATO DELLE COLONNE
         if not all(col in df_tmp.columns for col in REQUIRED_COLUMNS):
-            st.error(f"CSV non valido. Deve contenere: {REQUIRED_COLUMNS}")
+            st.info("💡 Mappa le colonne del tuo file CSV con le voci richieste dal sistema:")
+            col_map = {}
+            cols_csv = ["-- Seleziona --"] + list(df_tmp.columns)
+            
+            for req_col in REQUIRED_COLUMNS:
+                default_idx = 0
+                for idx, c in enumerate(cols_csv):
+                    if req_col.lower() in c.lower():
+                        default_idx = idx
+                        break
+                col_map[req_col] = st.selectbox(f"Colonna per **{req_col}**", cols_csv, index=default_idx, key=f"map_{req_col}")
+            
+            if st.button("Importa con questo mapping", type="primary"):
+                if any(v == "-- Seleziona --" for k, v in col_map.items() if k != "Escludi"):
+                    st.error("Associa tutte le colonne obbligatorie prima di procedere.")
+                else:
+                    df_nuovo = pd.DataFrame()
+                    for req_col in REQUIRED_COLUMNS:
+                        if col_map[req_col] != "-- Seleziona --":
+                            df_nuovo[req_col] = df_tmp[col_map[req_col]]
+                        else:
+                            df_nuovo[req_col] = False if req_col == "Escludi" else ""
+                    
+                    for col in ["Docente", "Giorno", "Ora", "Classe", "Tipo"]:
+                        df_nuovo[col] = df_nuovo[col].astype(str).str.strip()
+                    if "Escludi" in df_nuovo.columns:
+                        df_nuovo["Escludi"] = df_nuovo["Escludi"].astype(bool)
+
+                    valori_non_validi = df_nuovo[
+                        ~df_nuovo["Giorno"].isin(GIORNI_SETTIMANA) | ~df_nuovo["Ora"].isin(ORE_LEZIONE)
+                    ]
+                    conflitti_csv = trova_conflitti_orario(df_nuovo)
+                    if not valori_non_validi.empty:
+                        st.error(
+                            f"Il CSV contiene valori di Giorno/Ora non validi (attesi {GIORNI_SETTIMANA} e {ORE_LEZIONE})."
+                        )
+                        st.dataframe(valori_non_validi, use_container_width=True, hide_index=True)
+                    elif conflitti_csv:
+                        st.error("Il CSV contiene docenti assegnati a più classi nella stessa ora:")
+                        for docente, giorno, ora in conflitti_csv:
+                            st.write(f"- {docente}: {giorno} ora {ora}")
+                    else:
+                        orario_df = df_nuovo
+                        if salva_orario(orario_df):
+                            st.success("Orario caricato con successo ✅")
+                            st.rerun()
         else:
             df_nuovo = df_tmp[REQUIRED_COLUMNS].copy()
             for col in ["Docente", "Giorno", "Ora", "Classe", "Tipo"]:
@@ -830,13 +770,10 @@ if menu == "Inserisci/Modifica Orario":
             ]
             conflitti_csv = trova_conflitti_orario(df_nuovo)
             if not valori_non_validi.empty:
-                st.error(
-                    f"Il CSV contiene valori di Giorno/Ora non validi (attesi {GIORNI_SETTIMANA} e {ORE_LEZIONE}). "
-                    "Correggi il file e ricaricalo."
-                )
+                st.error("Giorno o Ora non validi nel CSV.")
                 st.dataframe(valori_non_validi, use_container_width=True, hide_index=True)
             elif conflitti_csv:
-                st.error("Il CSV contiene docenti assegnati a più classi nella stessa ora:")
+                st.error("Conflitti trovati nel CSV:")
                 for docente, giorno, ora in conflitti_csv:
                     st.write(f"- {docente}: {giorno} ora {ora}")
             else:
@@ -845,7 +782,6 @@ if menu == "Inserisci/Modifica Orario":
                     st.success("Orario caricato con successo ✅")
                     st.rerun()
 
-    # Inserimento nuova lezione
     with st.expander("Aggiungi una nuova lezione"):
         docente = st.selectbox(
             "Nome docente",
@@ -891,7 +827,6 @@ if menu == "Inserisci/Modifica Orario":
             else:
                 st.error("Compila tutti i campi per aggiungere una lezione.")
 
-    # Modifica orario esistente
     st.subheader("📝 Modifica orario attuale")
     if not orario_df.empty:
         col_order = REQUIRED_COLUMNS
@@ -915,7 +850,6 @@ if menu == "Inserisci/Modifica Orario":
             df_da_salvare = edited_df.copy()
             for col in ["Docente", "Giorno", "Ora", "Classe", "Tipo"]:
                 df_da_salvare[col] = df_da_salvare[col].astype(str).str.strip()
-            # scarta righe vuote (es. nuove righe aggiunte e non compilate)
             df_da_salvare = df_da_salvare[df_da_salvare["Docente"] != ""].copy()
 
             conflitti_edit = trova_conflitti_orario(df_da_salvare)
@@ -939,7 +873,6 @@ elif menu == "Gestione Assenze":
     else:
         data_sostituzione = st.date_input("Data della sostituzione")
 
-        # Giorno calcolato automaticamente dalla data (in italiano)
         giorno_assente = data_sostituzione.strftime("%A")
         traduzione_giorni = {
             "Monday": "Lunedì", "Tuesday": "Martedì", "Wednesday": "Mercoledì",
@@ -952,10 +885,7 @@ elif menu == "Gestione Assenze":
 
         docenti_assenti = st.multiselect("Seleziona docenti assenti", sorted(orario_df["Docente"].unique()))
 
-        # =========================
-        # CLASSI IN USCITA DIDATTICA (libera i curricolari di quelle classi)
-        # =========================
-        classi_uscita_per_ora = {}  # {ora: set(classi in uscita in quell'ora)}
+        classi_uscita_per_ora = {}
         with st.expander("🚌 Classi in uscita didattica (oggi)"):
             st.caption(
                 "Se una o più classi sono in uscita, i docenti curricolari [C] che in "
@@ -989,7 +919,6 @@ elif menu == "Gestione Assenze":
         if not docenti_assenti:
             st.info("Seleziona almeno un docente per continuare.")
         else:
-            # Ore scoperte dell'assente (mostriamo anche se l'assente ha Escludi True)
             ore_assenti = orario_df[
                 (orario_df["Docente"].isin(docenti_assenti)) &
                 (orario_df["Giorno"] == giorno_assente)
@@ -1000,7 +929,6 @@ elif menu == "Gestione Assenze":
             else:
                 st.subheader("📌 Ore scoperte")
 
-                # --- Aggiunta: calcolo sostegni in servizio per ogni ora scoperta ---
                 ore_assenti_display = ore_assenti.copy()
                 sostegni_presenti = []
 
@@ -1008,7 +936,6 @@ elif menu == "Gestione Assenze":
                     ora = r["Ora"]
                     classe = r["Classe"]
 
-                    # Cerca docenti di sostegno in quella classe-ora
                     sost_df = orario_df[
                         (orario_df["Giorno"] == giorno_assente) &
                         (orario_df["Ora"] == ora) &
@@ -1019,51 +946,36 @@ elif menu == "Gestione Assenze":
                     if sost_df.empty:
                         sostegni_presenti.append("—")
                     else:
-                        # Elenco nomi separati da virgola
                         lista = ", ".join(sorted(sost_df["Docente"].unique()))
                         sostegni_presenti.append(lista)
 
-                # Colonna aggiuntiva
                 ore_assenti_display["Sostegni in servizio"] = sostegni_presenti
-
-                # Ordina in modo naturale
                 ore_assenti_display = ore_assenti_display[["Docente", "Ora", "Classe", "Tipo", "Sostegni in servizio"]]
-
                 st.dataframe(ore_assenti_display, use_container_width=True, hide_index=True)
-
 
                 st.subheader("🔄 Possibili sostituti")
                 sostituzioni = []
 
-                # Precalcolo: tutti i docenti (escludiamo definitivamente chi ha Escludi=True)
                 tutti_docenti = sorted(orario_df["Docente"].unique())
                 escludi_docenti = set(orario_df[orario_df["Escludi"]]["Docente"].unique())
-                # Tutti i docenti assenti oggi (non solo quello della singola ora): nessuno di
-                # loro può comparire come possibile sostituto, in nessuna ora.
                 docenti_assenti_set = set(docenti_assenti)
 
-                # Mappa docente -> tipo, calcolata UNA volta sola
                 docente_tipo_map = build_docente_tipo_map(orario_df)
                 def tipo_docente(d):
                     return docente_tipo_map.get(d, "")
 
-                # Ordino per ora (I → VI) in modo che tutte le I ore compaiano
-                # insieme, poi le II, ecc. — indipendentemente da quanti docenti
-                # sono assenti e dall'ordine in cui sono stati selezionati.
                 ore_assenti["Ora"] = pd.Categorical(
                     ore_assenti["Ora"], categories=ORE_LEZIONE, ordered=True
                 )
                 ore_assenti = ore_assenti.sort_values(["Ora", "Docente"]).reset_index(drop=True)
 
-                ora_corrente = None  # tiene traccia dell'ora per mostrare il separatore
+                ora_corrente = None
 
-                # Per ogni ora scoperta costruisco la lista di opzioni con l'ordine richiesto
                 for _, row in ore_assenti.iterrows():
                     ora = row["Ora"]
                     classe = row["Classe"]
                     assente = row["Docente"]
 
-                    # Intestazione visiva quando cambia l'ora
                     if ora != ora_corrente:
                         if ora_corrente is not None:
                             st.markdown("<hr style='border:none;border-top:2px solid #E3D9C2;margin:16px 0 12px;'>", unsafe_allow_html=True)
@@ -1075,8 +987,6 @@ elif menu == "Gestione Assenze":
                         )
                         ora_corrente = ora
 
-                    # Docenti presenti in quell'ora (escludiamo chi ha Escludi=True e
-                    # chiunque sia stato segnato assente oggi, non solo l'assente di questa riga)
                     presenti_ora_df = orario_df[
                         (orario_df["Giorno"] == giorno_assente) &
                         (orario_df["Ora"] == ora) &
@@ -1084,23 +994,21 @@ elif menu == "Gestione Assenze":
                         (~orario_df["Docente"].isin(docenti_assenti_set))
                     ].copy()
 
-                    presenti_ora = list(dict.fromkeys(presenti_ora_df["Docente"].tolist()))  # mantiene ordine stabile
+                    presenti_ora = list(dict.fromkeys(presenti_ora_df["Docente"].tolist()))
 
                     added = set()
                     options = ["Nessuno"]
 
-                    # 1) Sostegni della stessa classe in quell'ora -> [S]
                     same_class_sost = presenti_ora_df[
                         (presenti_ora_df["Tipo"].str.lower() == "sostegno") &
                         (presenti_ora_df["Classe"] == classe) &
                         (presenti_ora_df["Docente"] != assente)
                     ]["Docente"].unique().tolist()
                     for d in sorted(same_class_sost):
-                        label = f"[S] {d}"
+                        label = f"🔵 [S] {d}"
                         if d not in added:
                             options.append(label); added.add(d)
 
-                    # 2) Altri sostegni presenti in quell'ora -> [S]
                     other_sost = presenti_ora_df[
                         (presenti_ora_df["Tipo"].str.lower() == "sostegno") &
                         (presenti_ora_df["Docente"] != assente)
@@ -1108,12 +1016,9 @@ elif menu == "Gestione Assenze":
                     for d in sorted(other_sost):
                         if d in added: 
                             continue
-                        label = f"[S] {d}"
+                        label = f"🔵 [S] {d}"
                         options.append(label); added.add(d)
 
-                    # 3) Curricolari presenti in quell'ora -> [C], a meno che la loro
-                    # classe non sia in uscita didattica in quell'ora (in tal caso sono
-                    # liberi -> [C] [USCITA])
                     curricolari_presenti_df = presenti_ora_df[
                         (presenti_ora_df["Tipo"].str.lower() != "sostegno") &
                         (presenti_ora_df["Docente"] != assente)
@@ -1128,23 +1033,18 @@ elif menu == "Gestione Assenze":
                         ~curricolari_presenti_df["Classe"].isin(uscita_classi_ora)
                     ]["Docente"].unique().tolist()
 
-                    # 3a) Curricolari liberi perché la classe è in uscita -> [C] [USCITA]
                     for d in sorted(curricolari_liberi_uscita):
                         if d in added:
                             continue
-                        label = f"[C] [USCITA] {d}"
+                        label = f"🟡 [C] [USCITA] {d}"
                         options.append(label); added.add(d)
 
-                    # 3b) Curricolari realmente occupati in quell'ora -> [C]
                     for d in sorted(curricolari_occupati):
                         if d in added:
                             continue
-                        label = f"[C] {d}"
+                        label = f"🔴 [C] {d}"
                         options.append(label); added.add(d)
 
-                    # 4) Docenti che NON compaiono in quell'ora -> [S] [NP] o [C] [NP]
-                    # candidati NP: tutti i docenti presenti nell'orario generale MA non in 'presenti_ora',
-                    # non assenti oggi (nessuno di loro), non escludi
                     presenti_ora_set = set(presenti_ora)
                     np_candidates = [
                         d for d in tutti_docenti
@@ -1153,7 +1053,6 @@ elif menu == "Gestione Assenze":
                         and d not in escludi_docenti
                     ]
 
-                    # separo NP in S e C (in base al "Tipo" trovato nell'orario)
                     np_sost = []
                     np_curr = []
                     for d in np_candidates:
@@ -1163,35 +1062,31 @@ elif menu == "Gestione Assenze":
                         else:
                             np_curr.append(d)
 
-                    # Aggiungo prima NP sostegni, poi NP curricolari
                     for d in sorted(np_sost):
                         if d in added:
                             continue
-                        label = f"[S] [NP] {d}"
+                        label = f"🟢 [S] [NP] {d}"
                         options.append(label); added.add(d)
 
                     for d in sorted(np_curr):
                         if d in added:
                             continue
-                        label = f"[C] [NP] {d}"
+                        label = f"🟢 [C] [NP] {d}"
                         options.append(label); added.add(d)
 
-                    # Rimuovo eventuali docenti esclusi (già filtrati) e assente (già escluso)
-                    # --- suggerimento automatico (come prima gerarchia, con i liberi per
-                    # uscita subito dopo i sostegni e prima dei curricolari davvero occupati) ---
                     proposto_display = "Nessuno"
                     if len(same_class_sost) > 0:
-                        proposto_display = f"[S] {sorted(same_class_sost)[0]}"
+                        proposto_display = f"🔵 [S] {sorted(same_class_sost)[0]}"
                     elif len(other_sost) > 0:
-                        proposto_display = f"[S] {sorted(other_sost)[0]}"
+                        proposto_display = f"🔵 [S] {sorted(other_sost)[0]}"
                     elif len(curricolari_liberi_uscita) > 0:
-                        proposto_display = f"[C] [USCITA] {sorted(curricolari_liberi_uscita)[0]}"
+                        proposto_display = f"🟡 [C] [USCITA] {sorted(curricolari_liberi_uscita)[0]}"
                     elif len(curricolari_occupati) > 0:
-                        proposto_display = f"[C] {sorted(curricolari_occupati)[0]}"
+                        proposto_display = f"🔴 [C] {sorted(curricolari_occupati)[0]}"
                     elif len(np_sost) > 0:
-                        proposto_display = f"[S] [NP] {sorted(np_sost)[0]}"
+                        proposto_display = f"🟢 [S] [NP] {sorted(np_sost)[0]}"
                     elif len(np_curr) > 0:
-                        proposto_display = f"[C] [NP] {sorted(np_curr)[0]}"
+                        proposto_display = f"🟢 [C] [NP] {sorted(np_curr)[0]}"
 
                     default_index = options.index(proposto_display) if proposto_display in options else 0
 
@@ -1202,8 +1097,6 @@ elif menu == "Gestione Assenze":
                         )
                     bg, fg, ico = _colore_tipo(proposto_display)
                     with col_dx:
-                        nome_prop = proposto_display.replace("[S] [NP] ","").replace("[C] [NP] ","") \
-                            .replace("[C] [USCITA] ","").replace("[S] ","").replace("[C] ","").strip()
                         st.markdown(
                             f'<div style="background:{bg};color:{fg};border-radius:8px;'
                             f'padding:4px 8px;font-size:0.78em;font-weight:700;text-align:center;">'
@@ -1219,13 +1112,12 @@ elif menu == "Gestione Assenze":
                         label_visibility="collapsed",
                     )
 
-                    # Badge colorato per la scelta corrente
                     bg2, fg2, ico2 = _colore_tipo(scelta)
                     tipo_label = (
                         "Sostegno" if "[S]" in scelta and "[NP]" not in scelta
                         else "Uscita" if "[USCITA]" in scelta
-                        else "Non in orario" if "[NP]" in scelta
-                        else "Curricolare" if "[C]" in scelta
+                        else "Non in orario (Libero)" if "[NP]" in scelta
+                        else "Curricolare (Occupato)" if "[C]" in scelta
                         else "—"
                     )
                     if scelta != "Nessuno":
@@ -1238,7 +1130,6 @@ elif menu == "Gestione Assenze":
                         )
                     st.markdown("---")
 
-                    # pulisco il nome per lo storico (rimuovo prefissi tipo "[S] [NP] " ecc.)
                     if scelta == "Nessuno":
                         nome_pulito = "Nessuno"
                     else:
@@ -1248,6 +1139,8 @@ elif menu == "Gestione Assenze":
                                   .replace("[C] [USCITA] ", "")
                                   .replace("[S] ", "")
                                   .replace("[C] ", "")
+                                  .replace("🔵 ", "").replace("🟡 ", "")
+                                  .replace("🟢 ", "").replace("🔴 ", "")
                                   .strip()
                         )
 
@@ -1261,7 +1154,6 @@ elif menu == "Gestione Assenze":
 
                 sostituzioni_df = pd.DataFrame(sostituzioni)
 
-                # Ordina per ora
                 ordine_ore = ORE_LEZIONE
                 if not sostituzioni_df.empty:
                     sostituzioni_df["Ora"] = pd.Categorical(sostituzioni_df["Ora"], categories=ordine_ore, ordered=True)
@@ -1293,11 +1185,9 @@ elif menu == "Gestione Assenze":
                     )
                 st.markdown(cards_html, unsafe_allow_html=True)
 
-                # --- VISTA TESTUALE ---
                 st.subheader("📝 Sostituzioni in formato testo (mobile/copincolla)")
-                testo_output = "Buongiorno, supplenze:\n\n"
+                testo_output = "Buongiorno, supplenze.©\n\n"
 
-                # uso sostituzioni_df che ha sia display che nome pulito
                 for ora, gruppo in sostituzioni_df.groupby("Ora"):
                     if not gruppo.empty:
                         testo_output += f"🕐 *{ora} ORA*\n"
@@ -1308,15 +1198,20 @@ elif menu == "Gestione Assenze":
                             testo_output += f"✅ Sostituzione: {sost_pulito}\n\n"
 
                 testo_strip = testo_output.strip()
-                st.text_area("Testo pronto da copiare", value=testo_strip, height=300)
-                # Bottone "Copia negli appunti" via JavaScript.
-                # json.dumps si occupa di tutto l'escaping (virgolette, backslash, a capo),
-                # evitando i replace manuali che non coprivano le virgolette doppie.
+                st.text_area("Testo pronto da copiare", value=testo_strip, height=260)
+                
+                # BOTTONE WHATSAPP (A TUTA LARGHEZZA)
+                encoded_text = urllib.parse.quote(testo_strip)
+                st.markdown(
+                    f'<a href="https://api.whatsapp.com/send?text={encoded_text}" target="_blank" class="btn-whatsapp">📲 Invia su WhatsApp</a>',
+                    unsafe_allow_html=True
+                )
+                
                 testo_json = json.dumps(testo_strip)
                 st.components.v1.html(f"""
 <button id="copia-sostituzioni-btn" style="
     width:100%; padding:0.7em; font-size:1em; font-weight:bold;
-    background:#C97D3D; color:white; border:none; border-radius:10px; cursor:pointer;
+    background:#C97D3D; color:white; border:none; border-radius:10px; cursor:pointer; margin-top:10px;
 ">📋 Copia negli appunti</button>
 <script>
 document.getElementById('copia-sostituzioni-btn').addEventListener('click', function() {{
@@ -1326,9 +1221,8 @@ document.getElementById('copia-sostituzioni-btn').addEventListener('click', func
     }});
 }});
 </script>
-""", height=55)
+""", height=65)
 
-                # --- Riepilogo stampabile / PDF per la bacheca (v2.2) ---
                 st.subheader("🖨️ Riepilogo per la bacheca")
                 st.caption(
                     "Apre una finestra pronta per la stampa. Dal dialogo di stampa del "
@@ -1336,7 +1230,6 @@ document.getElementById('copia-sostituzioni-btn').addEventListener('click', func
                 )
                 pulsante_stampa_sostituzioni(PLESSO_NAME, data_sostituzione, giorno_assente, tabella_df)
 
-                # --- Step 1: conferma (controllo conflitti) ---
                 if st.button("✅ Conferma tabella (non salva ancora)", type="primary"):
                     check_df = sostituzioni_df.copy()
                     conflitti = []
@@ -1346,15 +1239,11 @@ document.getElementById('copia-sostituzioni-btn').addEventListener('click', func
                         assegnazioni = check_df[check_df["Ora"] == ora_val]
                         sostituti = [s for s in assegnazioni["Sostituto"] if s not in ["Nessuno", "", "—"]]
 
-                        # 1) Conflitto: stesso docente scelto su più classi nella stessa ora
                         duplicati = [s for s in sostituti if sostituti.count(s) > 1]
                         if duplicati:
                             conflitti.append((ora_val, list(set(duplicati))))
 
-                        # 2) Conflitto: docente scelto ma già in orario in quell’ora (SOLO
-                        # curricolari, e solo se la sua classe in quell’ora NON è in uscita)
                         for s in sostituti:
-                            # recupero il tipo del docente dalla mappa precalcolata
                             tipo = docente_tipo_map.get(s, "").lower()
                             if tipo != "sostegno":
                                 lezione_in_quell_ora = orario_df[
@@ -1379,7 +1268,6 @@ document.getElementById('copia-sostituzioni-btn').addEventListener('click', func
                                 st.write(f"- Ora {ora_c}: {docente} è già impegnato in orario")
                         st.stop()
 
-                    # se tutto ok salvo in session_state
                     st.session_state["sostituzioni_confermate"] = sostituzioni_df.copy()
                     st.session_state["ore_assenti_confermate"] = ore_assenti.copy()
                     st.session_state["data_sostituzione_tmp"] = data_sostituzione
@@ -1387,8 +1275,6 @@ document.getElementById('copia-sostituzioni-btn').addEventListener('click', func
 
                     st.success("Tabella confermata ✅ Ora puoi salvarla nello storico.")
 
-
-                # --- Step 2: Salva nello storico ---
                 if st.session_state.get("sostituzioni_confermate") is not None:
                     if st.button("💾 Salva nello storico", key="save_storico_main", type="primary"):
                         sost_df = st.session_state.get("sostituzioni_confermate")
@@ -1397,7 +1283,6 @@ document.getElementById('copia-sostituzioni-btn').addEventListener('click', func
                         giorno_tmp = st.session_state.get("giorno_assente_tmp")
 
                         if sost_df is not None and ore_assenti_session is not None:
-                            # salva_storico_assenze si aspetta la colonna "Sostituto" con il nome pulito
                             if salva_storico_assenze(data_tmp, giorno_tmp, sost_df, ore_assenti_session):
                                 st.success("Assenze e sostituzioni salvate nello storico ✅")
                                 for k in ["sostituzioni_confermate", "ore_assenti_confermate",
@@ -1408,38 +1293,43 @@ document.getElementById('copia-sostituzioni-btn').addEventListener('click', func
                                 except Exception:
                                     pass
 
-
-
-
-
 # --- VISUALIZZA ORARIO ---
 elif menu == "Visualizza Orario":
     st.header("📅 Orario completo")
     if orario_df.empty:
         st.warning("Nessun orario disponibile.")
     else:
-        docenti_selezionati = st.multiselect(
-            "🔍 Filtra per docente (lascia vuoto per vedere tutti)",
-            sorted(orario_df["Docente"].unique())
-        )
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            docenti_selezionati = st.multiselect(
+                "🔍 Filtra per Docente",
+                sorted(orario_df["Docente"].unique())
+            )
+        with col_f2:
+            classi_selezionate = st.multiselect(
+                "🏫 Filtra per Classe",
+                sorted(orario_df["Classe"].unique())
+            )
+
+        df_filtrato = orario_df.copy()
+
         if docenti_selezionati:
-            # Righe dei docenti selezionati
-            df_base = orario_df[orario_df["Docente"].isin(docenti_selezionati)]
-            # Compresenze: sostegni che operano nelle stesse classe+giorno+ora
+            df_base = df_filtrato[df_filtrato["Docente"].isin(docenti_selezionati)]
             chiavi = df_base[["Classe", "Giorno", "Ora"]].drop_duplicates()
-            df_compresenze = orario_df[
-                orario_df["Tipo"].str.lower() == "sostegno"
+            df_compresenze = df_filtrato[
+                df_filtrato["Tipo"].str.lower() == "sostegno"
             ].merge(chiavi, on=["Classe", "Giorno", "Ora"], how="inner")
             df_filtrato = pd.concat([df_base, df_compresenze]).drop_duplicates()
-            if df_filtrato.empty:
-                st.warning("Nessun risultato.")
-            else:
-                vista_pivot_docenti(df_filtrato, mode="classi")
+
+        if classi_selezionate:
+            df_filtrato = df_filtrato[df_filtrato["Classe"].isin(classi_selezionate)]
+
+        if df_filtrato.empty:
+            st.warning("Nessun risultato corrisponde ai filtri selezionati.")
         else:
-            vista_pivot_docenti(orario_df, mode="classi")
+            vista_pivot_docenti(df_filtrato, mode="classi")
+
         download_orario(orario_df)
-
-
 
 # --- STATISTICHE ---
 elif menu == "Statistiche":
@@ -1447,9 +1337,6 @@ elif menu == "Statistiche":
     with st.spinner('Caricamento statistiche...'):
         df_storico, df_assenze = carica_statistiche()
 
-    # --- Filtro per intervallo di date (si applica sia a sostituzioni che ad
-    # assenze qui sotto; non influisce sull'archiviazione o la cancellazione,
-    # che restano operazioni sui dati completi) ---
     date_storico = pd.to_datetime(df_storico["data"], errors="coerce") if "data" in df_storico.columns else pd.Series([], dtype="datetime64[ns]")
     date_assenze = pd.to_datetime(df_assenze["data"], errors="coerce") if "data" in df_assenze.columns else pd.Series([], dtype="datetime64[ns]")
     tutte_le_date = pd.concat([date_storico, date_assenze]).dropna()
@@ -1466,14 +1353,11 @@ elif menu == "Statistiche":
         min_value=data_min_default,
         max_value=data_max_default,
         key="statistiche_intervallo_date",
-        help="Filtra le statistiche qui sotto (sostituzioni e assenze) per periodo. "
-             "Non cancella né archivia nulla: agisce solo su questa schermata."
+        help="Filtra le statistiche qui sotto per periodo."
     )
     if isinstance(intervallo, tuple) and len(intervallo) == 2:
         data_inizio, data_fine = intervallo
     elif isinstance(intervallo, tuple) and len(intervallo) == 1:
-        # l'utente ha selezionato solo la data di inizio: aspetto la fine,
-        # nel frattempo mostro solo quel giorno
         data_inizio = data_fine = intervallo[0]
     else:
         data_inizio = data_fine = intervallo
@@ -1492,7 +1376,6 @@ elif menu == "Statistiche":
         ].copy()
 
     def render_cards(titolo, righe, colore):
-        """Renderizza un blocco card colorato con titolo e lista di (nome, valore)."""
         medaglie = ["🥇", "🥈", "🥉"]
         items_html = ""
         for i, (nome, val) in enumerate(righe):
@@ -1521,8 +1404,6 @@ elif menu == "Statistiche":
 
         top3 = [(r["docente"], int(r["Totale Ore Sostituite"])) for _, r in df_sorted.head(3).iterrows()]
 
-        # Per i "meno sostituzioni" filtro solo i docenti di sostegno [S],
-        # inclusi quelli a zero ore (non presenti nello storico)
         docenti_sostegno = set(
             orario_df[
                 (orario_df["Tipo"].str.lower() == "sostegno") &
@@ -1564,14 +1445,11 @@ elif menu == "Statistiche":
         else:
             st.info("Nessuna assenza registrata nell'intervallo di date selezionato.")
     else:
-        # Ore totali per docente
         df_ore = df_assenze.groupby("docente")["ora"].count().reset_index().rename(columns={"ora": "Totale Ore Assenti"})
-        # Giorni effettivi: date distinte per docente
         df_giorni = df_assenze.groupby("docente")["data"].nunique().reset_index().rename(columns={"data": "Giorni Assenti"})
         df_assenze_agg = df_ore.merge(df_giorni, on="docente")
         df_assenze_agg = df_assenze_agg.sort_values("Totale Ore Assenti", ascending=False).reset_index(drop=True)
 
-        # Card assenze con ore + giorni
         medaglie = ["🥇", "🥈", "🥉"]
         items_html = ""
         for i, (_, r) in enumerate(df_assenze_agg.head(3).iterrows()):
@@ -1602,19 +1480,32 @@ elif menu == "Statistiche":
         else:
             st.warning("Devi spuntare la conferma prima di cancellare lo storico delle assenze.")
 
-    st.subheader("Cloud Backup")
-    st.info("Scarica un backup compresso dei dati dei fogli Orario, Storico e Assenze.")
-    backup_file = create_backup()
-    if backup_file:
-        st.download_button(
-            label="⬇️ Scarica Backup (ZIP)",
-            data=backup_file,
-            file_name=f"{SPREADSHEET_NAME}_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
-            mime="application/zip",
-            help="Crea un backup in formato .zip e lo scarica direttamente."
-        )
+    st.subheader("💾 Esportazioni & Cloud Backup")
+    col_exp1, col_exp2 = st.columns(2)
+    
+    with col_exp1:
+        st.info("Scarica un unico file Excel (.xlsx) con tutti i dati formattati su fogli distinti.")
+        excel_file = create_excel_export()
+        if excel_file:
+            st.download_button(
+                label="📊 Scarica Report Excel (.xlsx)",
+                data=excel_file,
+                file_name=f"{SPREADSHEET_NAME}_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="primary"
+            )
 
-    # --- ARCHIVIO ANNO SCOLASTICO ---
+    with col_exp2:
+        st.info("Scarica un backup compresso dei dati grezzi dei fogli Orario, Storico e Assenze.")
+        backup_file = create_backup()
+        if backup_file:
+            st.download_button(
+                label="⬇️ Scarica Backup (ZIP)",
+                data=backup_file,
+                file_name=f"{SPREADSHEET_NAME}_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
+                mime="application/zip"
+            )
+
     st.header("📦 Archivia anno scolastico")
     st.info(
         "Copia storico e assenze dell'anno corrente in fogli separati nel documento Google "
