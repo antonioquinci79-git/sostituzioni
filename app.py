@@ -5,6 +5,7 @@ import io
 import json
 import zipfile
 import html as html_lib
+import urllib.parse
 import gspread
 import gspread_dataframe as gd
 from google.oauth2.service_account import Credentials
@@ -13,7 +14,7 @@ from datetime import datetime
 # =========================
 # VERSIONE APP
 # =========================
-APP_VERSION = "2.3"
+APP_VERSION = "2.4"
 
 # =========================
 # CONFIGURAZIONE FILE / SHEETS
@@ -145,6 +146,35 @@ h1 { font-size: 1.7em; }
 h2 { font-size: 1.4em; }
 h3 { font-size: 1.2em; color: var(--dc-marrone); }
 
+.btn-whatsapp {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 0.8em;
+    background-color: #25D366;
+    color: white !important;
+    font-weight: bold;
+    text-decoration: none;
+    border-radius: 14px;
+    margin-top: 5px;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+}
+.btn-telegram {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 0.8em;
+    background-color: #0088cc;
+    color: white !important;
+    font-weight: bold;
+    text-decoration: none;
+    border-radius: 14px;
+    margin-top: 5px;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+}
+
 @media (max-width: 480px) {
     html, body, [class*="css"] { font-size: 18px; }
     .stButton button { font-size: 1.15em; padding: 1em; }
@@ -274,7 +304,7 @@ def carica_statistiche():
         return pd.DataFrame(columns=["data", "giorno", "docente", "ore"]), pd.DataFrame(columns=["data", "giorno", "docente", "ora", "classe"])
 
 def salva_storico_assenze(data_sostituzione, giorno_assente, sostituzioni_df, ore_assenti):
-    """Salvataggio coordinato ed esplicito su Google Sheets per prevenire incoerenze nei dati."""
+    """Salvataggio coordinato ed esplicito su Google Sheets."""
     try:
         ws_storico = get_worksheet(STORICO_SHEET)
         ws_assenze = get_worksheet(ASSENZE_SHEET)
@@ -299,7 +329,6 @@ def salva_storico_assenze(data_sostituzione, giorno_assente, sostituzioni_df, or
             for _, row in ore_effettivamente_assenti.iterrows()
         ]
 
-        # Esecuzione sequenziale controllata
         if storico_data:
             ws_storico.append_rows(storico_data, value_input_option="USER_ENTERED")
         if assenze_data:
@@ -308,7 +337,7 @@ def salva_storico_assenze(data_sostituzione, giorno_assente, sostituzioni_df, or
         carica_statistiche.clear()
         return True
     except Exception as e:
-        st.error(f"Errore durante il salvataggio sincronizzato dei dati su Google Sheets: {e}")
+        st.error(f"Errore durante il salvataggio dei dati su Google Sheets: {e}")
         return False
 
 def clear_sheet_content(sheet_name):
@@ -386,7 +415,6 @@ def create_backup():
         return None
 
 def create_excel_export():
-    """Genera un unico file Excel (.xlsx) con fogli multipli formattati per la segreteria."""
     try:
         ws_orario = get_worksheet(ORARIO_SHEET)
         df_orario = gd.get_as_dataframe(ws_orario, evaluate_formulas=True, header=0).dropna(how='all')
@@ -403,7 +431,6 @@ def create_excel_export():
             df_storico.to_excel(writer, sheet_name='Storico Sostituzioni', index=False)
             df_assenze.to_excel(writer, sheet_name='Storico Assenze', index=False)
             
-            # Adatta la larghezza colonne in modo automatico su tutti i fogli
             for sheet_name, df_sheet in [('Orario', df_orario), ('Storico Sostituzioni', df_storico), ('Storico Assenze', df_assenze)]:
                 worksheet = writer.sheets[sheet_name]
                 for idx, col in enumerate(df_sheet.columns):
@@ -435,31 +462,23 @@ def trova_conflitti_orario(df):
 
 def _colore_tipo(label):
     if "[S]" in label and "[NP]" not in label:
-        return "#6B8F71", "white", "●"
+        return "#6B8F71", "white", "🔵"
     elif "[C] [USCITA]" in label:
-        return "#5E7A93", "white", "✈"
+        return "#5E7A93", "white", "🟡"
     elif "[NP]" in label:
-        return "#9C9C7A", "white", "○"
+        return "#9C9C7A", "white", "🟢"
     elif "[C]" in label:
-        return "#C97D3D", "white", "●"
+        return "#C97D3D", "white", "🔴"
     return "#E3D9C2", "#3A2E1F", "–"
 
 def _badge_sostituto(label):
     if label == "Nessuno":
         return '<span style="color:#9C5F2C;font-style:italic;">— nessuno —</span>'
-    if "[S]" in label and "[NP]" not in label:
-        bg, fg = "#6B8F71", "white"
-    elif "[C] [USCITA]" in label:
-        bg, fg = "#5E7A93", "white"
-    elif "[NP]" in label:
-        bg, fg = "#9C9C7A", "white"
-    elif "[C]" in label:
-        bg, fg = "#C97D3D", "white"
-    else:
-        bg, fg = "#E3D9C2", "#3A2E1F"
+    bg, fg, _ = _colore_tipo(label)
     nome = (label.replace("[S] [NP] ", "").replace("[C] [NP] ", "")
                  .replace("[C] [USCITA] ", "").replace("[S] ", "")
-                 .replace("[C] ", "").strip())
+                 .replace("[C] ", "").replace("🔵 ", "").replace("🟡 ", "")
+                 .replace("🟢 ", "").replace("🔴 ", "").strip())
     return (f'<span style="background:{bg};color:{fg};border-radius:8px;'
             f'padding:3px 10px;font-weight:700;font-size:0.9em;">{nome}</span>')
 
@@ -489,7 +508,8 @@ def genera_html_stampa_sostituzioni(plesso_nome, data_sost, giorno_assente, tabe
         sost_raw = str(r["Sostituzione"])
         sost_pulito = (sost_raw.replace("[S] [NP] ", "").replace("[C] [NP] ", "")
                                 .replace("[C] [USCITA] ", "").replace("[S] ", "")
-                                .replace("[C] ", "").strip())
+                                .replace("[C] ", "").replace("🔵 ", "").replace("🟡 ", "")
+                                .replace("🟢 ", "").replace("🔴 ", "").strip())
         if sost_pulito in ("Nessuno", "", "—"):
             sost_pulito = "— DA COPRIRE —"
         sostituto = html_lib.escape(sost_pulito)
@@ -714,7 +734,6 @@ if menu == "Inserisci/Modifica Orario":
             cols_csv = ["-- Seleziona --"] + list(df_tmp.columns)
             
             for req_col in REQUIRED_COLUMNS:
-                # Trova una corrispondenza approssimativa se presente
                 default_idx = 0
                 for idx, c in enumerate(cols_csv):
                     if req_col.lower() in c.lower():
@@ -994,13 +1013,14 @@ elif menu == "Gestione Assenze":
                     added = set()
                     options = ["Nessuno"]
 
+                    # 1. VISUAL BADGE INTEGRATED INTO SELECTBOX OPTIONS
                     same_class_sost = presenti_ora_df[
                         (presenti_ora_df["Tipo"].str.lower() == "sostegno") &
                         (presenti_ora_df["Classe"] == classe) &
                         (presenti_ora_df["Docente"] != assente)
                     ]["Docente"].unique().tolist()
                     for d in sorted(same_class_sost):
-                        label = f"[S] {d}"
+                        label = f"🔵 [S] {d}"
                         if d not in added:
                             options.append(label); added.add(d)
 
@@ -1011,7 +1031,7 @@ elif menu == "Gestione Assenze":
                     for d in sorted(other_sost):
                         if d in added: 
                             continue
-                        label = f"[S] {d}"
+                        label = f"🔵 [S] {d}"
                         options.append(label); added.add(d)
 
                     curricolari_presenti_df = presenti_ora_df[
@@ -1031,13 +1051,13 @@ elif menu == "Gestione Assenze":
                     for d in sorted(curricolari_liberi_uscita):
                         if d in added:
                             continue
-                        label = f"[C] [USCITA] {d}"
+                        label = f"🟡 [C] [USCITA] {d}"
                         options.append(label); added.add(d)
 
                     for d in sorted(curricolari_occupati):
                         if d in added:
                             continue
-                        label = f"[C] {d}"
+                        label = f"🔴 [C] {d}"
                         options.append(label); added.add(d)
 
                     presenti_ora_set = set(presenti_ora)
@@ -1060,28 +1080,28 @@ elif menu == "Gestione Assenze":
                     for d in sorted(np_sost):
                         if d in added:
                             continue
-                        label = f"[S] [NP] {d}"
+                        label = f"🟢 [S] [NP] {d}"
                         options.append(label); added.add(d)
 
                     for d in sorted(np_curr):
                         if d in added:
                             continue
-                        label = f"[C] [NP] {d}"
+                        label = f"🟢 [C] [NP] {d}"
                         options.append(label); added.add(d)
 
                     proposto_display = "Nessuno"
                     if len(same_class_sost) > 0:
-                        proposto_display = f"[S] {sorted(same_class_sost)[0]}"
+                        proposto_display = f"🔵 [S] {sorted(same_class_sost)[0]}"
                     elif len(other_sost) > 0:
-                        proposto_display = f"[S] {sorted(other_sost)[0]}"
+                        proposto_display = f"🔵 [S] {sorted(other_sost)[0]}"
                     elif len(curricolari_liberi_uscita) > 0:
-                        proposto_display = f"[C] [USCITA] {sorted(curricolari_liberi_uscita)[0]}"
+                        proposto_display = f"🟡 [C] [USCITA] {sorted(curricolari_liberi_uscita)[0]}"
                     elif len(curricolari_occupati) > 0:
-                        proposto_display = f"[C] {sorted(curricolari_occupati)[0]}"
+                        proposto_display = f"🔴 [C] {sorted(curricolari_occupati)[0]}"
                     elif len(np_sost) > 0:
-                        proposto_display = f"[S] [NP] {sorted(np_sost)[0]}"
+                        proposto_display = f"🟢 [S] [NP] {sorted(np_sost)[0]}"
                     elif len(np_curr) > 0:
-                        proposto_display = f"[C] [NP] {sorted(np_curr)[0]}"
+                        proposto_display = f"🟢 [C] [NP] {sorted(np_curr)[0]}"
 
                     default_index = options.index(proposto_display) if proposto_display in options else 0
 
@@ -1111,8 +1131,8 @@ elif menu == "Gestione Assenze":
                     tipo_label = (
                         "Sostegno" if "[S]" in scelta and "[NP]" not in scelta
                         else "Uscita" if "[USCITA]" in scelta
-                        else "Non in orario" if "[NP]" in scelta
-                        else "Curricolare" if "[C]" in scelta
+                        else "Non in orario (Libero)" if "[NP]" in scelta
+                        else "Curricolare (Occupato)" if "[C]" in scelta
                         else "—"
                     )
                     if scelta != "Nessuno":
@@ -1134,6 +1154,8 @@ elif menu == "Gestione Assenze":
                                   .replace("[C] [USCITA] ", "")
                                   .replace("[S] ", "")
                                   .replace("[C] ", "")
+                                  .replace("🔵 ", "").replace("🟡 ", "")
+                                  .replace("🟢 ", "").replace("🔴 ", "")
                                   .strip()
                         )
 
@@ -1191,12 +1213,27 @@ elif menu == "Gestione Assenze":
                             testo_output += f"✅ Sostituzione: {sost_pulito}\n\n"
 
                 testo_strip = testo_output.strip()
-                st.text_area("Testo pronto da copiare", value=testo_strip, height=300)
+                st.text_area("Testo pronto da copiare", value=testo_strip, height=260)
+                
+                # 2. BOTTONI RAPIDI WHATSAPP / TELEGRAM E COPIA
+                encoded_text = urllib.parse.quote(testo_strip)
+                col_btn1, col_btn2 = st.columns(2)
+                with col_btn1:
+                    st.markdown(
+                        f'<a href="https://api.whatsapp.com/send?text={encoded_text}" target="_blank" class="btn-whatsapp">📲 Invia su WhatsApp</a>',
+                        unsafe_allow_html=True
+                    )
+                with col_btn2:
+                    st.markdown(
+                        f'<a href="https://t.me/share/url?url=&text={encoded_text}" target="_blank" class="btn-telegram">✈️ Invia su Telegram</a>',
+                        unsafe_allow_html=True
+                    )
+                
                 testo_json = json.dumps(testo_strip)
                 st.components.v1.html(f"""
 <button id="copia-sostituzioni-btn" style="
     width:100%; padding:0.7em; font-size:1em; font-weight:bold;
-    background:#C97D3D; color:white; border:none; border-radius:10px; cursor:pointer;
+    background:#C97D3D; color:white; border:none; border-radius:10px; cursor:pointer; margin-top:10px;
 ">📋 Copia negli appunti</button>
 <script>
 document.getElementById('copia-sostituzioni-btn').addEventListener('click', function() {{
@@ -1206,7 +1243,7 @@ document.getElementById('copia-sostituzioni-btn').addEventListener('click', func
     }});
 }});
 </script>
-""", height=55)
+""", height=65)
 
                 st.subheader("🖨️ Riepilogo per la bacheca")
                 st.caption(
@@ -1284,23 +1321,37 @@ elif menu == "Visualizza Orario":
     if orario_df.empty:
         st.warning("Nessun orario disponibile.")
     else:
-        docenti_selezionati = st.multiselect(
-            "🔍 Filtra per docente (lascia vuoto per vedere tutti)",
-            sorted(orario_df["Docente"].unique())
-        )
+        # 3. FILTRO PER CLASSE E DOCENTE
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            docenti_selezionati = st.multiselect(
+                "🔍 Filtra per Docente",
+                sorted(orario_df["Docente"].unique())
+            )
+        with col_dx if 'col_dx' in locals() else col_f2:
+            classi_selezionate = st.multiselect(
+                "🏫 Filtra per Classe",
+                sorted(orario_df["Classe"].unique())
+            )
+
+        df_filtrato = orario_df.copy()
+
         if docenti_selezionati:
-            df_base = orario_df[orario_df["Docente"].isin(docenti_selezionati)]
+            df_base = df_filtrato[df_filtrato["Docente"].isin(docenti_selezionati)]
             chiavi = df_base[["Classe", "Giorno", "Ora"]].drop_duplicates()
-            df_compresenze = orario_df[
-                orario_df["Tipo"].str.lower() == "sostegno"
+            df_compresenze = df_filtrato[
+                df_filtrato["Tipo"].str.lower() == "sostegno"
             ].merge(chiavi, on=["Classe", "Giorno", "Ora"], how="inner")
             df_filtrato = pd.concat([df_base, df_compresenze]).drop_duplicates()
-            if df_filtrato.empty:
-                st.warning("Nessun risultato.")
-            else:
-                vista_pivot_docenti(df_filtrato, mode="classi")
+
+        if classi_selezionate:
+            df_filtrato = df_filtrato[df_filtrato["Classe"].isin(classi_selezionate)]
+
+        if df_filtrato.empty:
+            st.warning("Nessun risultato corrisponde ai filtri selezionati.")
         else:
-            vista_pivot_docenti(orario_df, mode="classi")
+            vista_pivot_docenti(df_filtrato, mode="classi")
+
         download_orario(orario_df)
 
 # --- STATISTICHE ---
