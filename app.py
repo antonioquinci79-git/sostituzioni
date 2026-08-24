@@ -14,7 +14,7 @@ from datetime import datetime
 # =========================
 # VERSIONE APP
 # =========================
-APP_VERSION = "2.4"
+APP_VERSION = "2.5"
 
 # =========================
 # CONFIGURAZIONE FILE / SHEETS
@@ -153,20 +153,6 @@ h3 { font-size: 1.2em; color: var(--dc-marrone); }
     width: 100%;
     padding: 0.8em;
     background-color: #25D366;
-    color: white !important;
-    font-weight: bold;
-    text-decoration: none;
-    border-radius: 14px;
-    margin-top: 5px;
-    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
-}
-.btn-telegram {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    padding: 0.8em;
-    background-color: #0088cc;
     color: white !important;
     font-weight: bold;
     text-decoration: none;
@@ -1013,7 +999,6 @@ elif menu == "Gestione Assenze":
                     added = set()
                     options = ["Nessuno"]
 
-                    # 1. VISUAL BADGE INTEGRATED INTO SELECTBOX OPTIONS
                     same_class_sost = presenti_ora_df[
                         (presenti_ora_df["Tipo"].str.lower() == "sostegno") &
                         (presenti_ora_df["Classe"] == classe) &
@@ -1215,19 +1200,12 @@ elif menu == "Gestione Assenze":
                 testo_strip = testo_output.strip()
                 st.text_area("Testo pronto da copiare", value=testo_strip, height=260)
                 
-                # 2. BOTTONI RAPIDI WHATSAPP / TELEGRAM E COPIA
+                # BOTTONE WHATSAPP (A TUTA LARGHEZZA)
                 encoded_text = urllib.parse.quote(testo_strip)
-                col_btn1, col_btn2 = st.columns(2)
-                with col_btn1:
-                    st.markdown(
-                        f'<a href="https://api.whatsapp.com/send?text={encoded_text}" target="_blank" class="btn-whatsapp">📲 Invia su WhatsApp</a>',
-                        unsafe_allow_html=True
-                    )
-                with col_btn2:
-                    st.markdown(
-                        f'<a href="https://t.me/share/url?url=&text={encoded_text}" target="_blank" class="btn-telegram">✈️ Invia su Telegram</a>',
-                        unsafe_allow_html=True
-                    )
+                st.markdown(
+                    f'<a href="https://api.whatsapp.com/send?text={encoded_text}" target="_blank" class="btn-whatsapp">📲 Invia su WhatsApp</a>',
+                    unsafe_allow_html=True
+                )
                 
                 testo_json = json.dumps(testo_strip)
                 st.components.v1.html(f"""
@@ -1321,14 +1299,13 @@ elif menu == "Visualizza Orario":
     if orario_df.empty:
         st.warning("Nessun orario disponibile.")
     else:
-        # 3. FILTRO PER CLASSE E DOCENTE
         col_f1, col_f2 = st.columns(2)
         with col_f1:
             docenti_selezionati = st.multiselect(
                 "🔍 Filtra per Docente",
                 sorted(orario_df["Docente"].unique())
             )
-        with col_dx if 'col_dx' in locals() else col_f2:
+        with col_f2:
             classi_selezionate = st.multiselect(
                 "🏫 Filtra per Classe",
                 sorted(orario_df["Classe"].unique())
