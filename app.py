@@ -362,7 +362,11 @@ def archivia_anno_scolastico(anno: str):
 
             ws_src = get_worksheet(sheet_src)
             dati = ws_src.get_all_values()
-            ws_dest = sh.add_worksheet(title=nome_dest, rows=max(len(dati) + 10, 50), cols=10)
+            
+            num_rows = max(len(dati) + 10, 50)
+            num_cols = max([len(riga) for riga in dati], default=10) if dati else 10
+
+            ws_dest = sh.add_worksheet(title=nome_dest, rows=num_rows, cols=num_cols)
             if dati:
                 ws_dest.update(values=dati, value_input_option="USER_ENTERED")
 
