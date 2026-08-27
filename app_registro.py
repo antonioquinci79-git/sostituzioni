@@ -14,7 +14,7 @@ from datetime import datetime
 # =========================
 # VERSIONE APP
 # =========================
-APP_VERSION = "2.5"
+APP_VERSION = "2.7"
 
 # =========================
 # CONFIGURAZIONE FILE / SHEETS
@@ -306,9 +306,12 @@ def salva_storico_assenze(data_sostituzione, giorno_assente, sostituzioni_df, or
             for _, row in sostituzioni_effettive.iterrows()
         ]
 
-        ore_effettivamente_assenti = ore_assenti[
-            ore_assenti["Ora"].isin(sostituzioni_effettive["Ora"])
-        ].copy()
+        chiavi_effettive = sostituzioni_effettive[["Ora", "Classe", "Assente"]].rename(
+            columns={"Assente": "Docente"}
+        )
+        ore_effettivamente_assenti = ore_assenti.merge(
+            chiavi_effettive, on=["Ora", "Classe", "Docente"], how="inner"
+        ).copy()
 
         assenze_data = [
             [str(data_sostituzione), giorno_assente, row["Docente"], row["Ora"], row["Classe"]]
@@ -492,20 +495,20 @@ def genera_html_stampa_sostituzioni(plesso_nome, data_sost, giorno_assente, tabe
     tabella_ordinata = tabella_ordinata.sort_values(["Ora", "Classe"])
 
     for _, r in tabella_ordinata.iterrows():
-        ora = html_lib.escape(str(r["Ora"]))
-        classe = html_lib.escape(str(r["Classe"]))
-        assente = html_lib.escape(str(r["Assente"]))
         sost_raw = str(r["Sostituzione"])
         sost_pulito = (sost_raw.replace("[S] [NP] ", "").replace("[C] [NP] ", "")
                                 .replace("[C] [USCITA] ", "").replace("[S] ", "")
                                 .replace("[C] ", "").replace("🔵 ", "").replace("🟡 ", "")
                                 .replace("🟢 ", "").replace("🔴 ", "").strip())
         if sost_pulito in ("Nessuno", "", "—"):
-            sost_pulito = "— DA COPRIRE —"
+            continue
+
+        ora = html_lib.escape(str(r["Ora"]))
+        classe = html_lib.escape(str(r["Classe"]))
+        assente = html_lib.escape(str(r["Assente"]))
         sostituto = html_lib.escape(sost_pulito)
-        riga_scoperta = ' class="scoperta"' if sost_pulito == "— DA COPRIRE —" else ""
         righe_html += (
-            f"<tr{riga_scoperta}><td>{ora}</td><td>{classe}</td>"
+            f"<tr><td>{ora}</td><td>{classe}</td>"
             f"<td>{assente}</td><td>{sostituto}</td></tr>\n"
         )
 
@@ -522,7 +525,6 @@ def genera_html_stampa_sostituzioni(plesso_nome, data_sost, giorno_assente, tabe
   table {{ width: 100%; border-collapse: collapse; font-size: 1.05em; }}
   th, td {{ border: 1px solid #999; padding: 8px 10px; text-align: left; }}
   th {{ background: #EFE6D3; font-size: 0.95em; text-transform: uppercase; letter-spacing: 0.03em; }}
-  tr.scoperta td {{ font-weight: bold; }}
   .piepagina {{ margin-top: 1.2em; font-size: 0.8em; color: #777; }}
   @media print {{ .no-print {{ display: none; }} }}
 </style>
@@ -1193,13 +1195,15 @@ elif menu == "Gestione Assenze":
                 testo_output = "Buongiorno, supplenze.©\n\n"
 
                 for ora, gruppo in sostituzioni_df.groupby("Ora"):
-                    if not gruppo.empty:
+                    gruppo_effettivo = gruppo[
+                        ~gruppo["Sostituto"].isin(["Nessuno", "", "—"])
+                    ]
+                    if not gruppo_effettivo.empty:
                         testo_output += f"🕐 *{ora} ORA*\n"
-                        for _, r in gruppo.iterrows():
-                            sost_pulito = r['Sostituto'] if r['Sostituto'] not in ["Nessuno", "", "—"] else "—"
+                        for _, r in gruppo_effettivo.iterrows():
                             testo_output += f"Classe {r['Classe']}\n"
                             testo_output += f"👩‍🏫 Assente: {r['Assente']}\n"
-                            testo_output += f"✅ Sostituzione: {sost_pulito}\n\n"
+                            testo_output += f"✅ Sostituzione: {r['Sostituto']}\n\n"
 
                 testo_strip = testo_output.strip()
                 st.text_area("Testo pronto da copiare", value=testo_strip, height=260)
