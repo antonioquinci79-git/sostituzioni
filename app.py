@@ -14,7 +14,7 @@ from datetime import datetime
 # =========================
 # VERSIONE APP
 # =========================
-APP_VERSION = "2.5"
+APP_VERSION = "2.6"
 
 # =========================
 # CONFIGURAZIONE FILE / SHEETS
@@ -306,9 +306,12 @@ def salva_storico_assenze(data_sostituzione, giorno_assente, sostituzioni_df, or
             for _, row in sostituzioni_effettive.iterrows()
         ]
 
-        ore_effettivamente_assenti = ore_assenti[
-            ore_assenti["Ora"].isin(sostituzioni_effettive["Ora"])
-        ].copy()
+        chiavi_effettive = sostituzioni_effettive[["Ora", "Classe", "Assente"]].rename(
+            columns={"Assente": "Docente"}
+        )
+        ore_effettivamente_assenti = ore_assenti.merge(
+            chiavi_effettive, on=["Ora", "Classe", "Docente"], how="inner"
+        ).copy()
 
         assenze_data = [
             [str(data_sostituzione), giorno_assente, row["Docente"], row["Ora"], row["Classe"]]
@@ -500,10 +503,10 @@ def genera_html_stampa_sostituzioni(plesso_nome, data_sost, giorno_assente, tabe
                                 .replace("[C] [USCITA] ", "").replace("[S] ", "")
                                 .replace("[C] ", "").replace("🔵 ", "").replace("🟡 ", "")
                                 .replace("🟢 ", "").replace("🔴 ", "").strip())
+        riga_scoperta = ""
         if sost_pulito in ("Nessuno", "", "—"):
-            sost_pulito = "— DA COPRIRE —"
+            sost_pulito = "— non necessaria —"
         sostituto = html_lib.escape(sost_pulito)
-        riga_scoperta = ' class="scoperta"' if sost_pulito == "— DA COPRIRE —" else ""
         righe_html += (
             f"<tr{riga_scoperta}><td>{ora}</td><td>{classe}</td>"
             f"<td>{assente}</td><td>{sostituto}</td></tr>\n"
