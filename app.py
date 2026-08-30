@@ -14,7 +14,7 @@ from datetime import datetime
 # =========================
 # VERSIONE APP
 # =========================
-APP_VERSION = "2.8"
+APP_VERSION = "2.9"
 
 # =========================
 # CONFIGURAZIONE FILE / SHEETS
@@ -1196,7 +1196,8 @@ elif menu == "Gestione Assenze":
                 st.markdown(cards_html, unsafe_allow_html=True)
 
                 st.subheader("📝 Sostituzioni in formato testo (mobile/copincolla)")
-                testo_output = "Buongiorno, supplenze.©\n\n"
+                testo_output = f"📅 {giorno_assente} {data_sostituzione.strftime('%d/%m/%Y')}\n"
+                testo_output += "Buongiorno, supplenze.©\n\n"
 
                 for ora, gruppo in sostituzioni_df.groupby("Ora"):
                     gruppo_effettivo = gruppo[
