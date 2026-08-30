@@ -14,7 +14,7 @@ from datetime import datetime
 # =========================
 # VERSIONE APP
 # =========================
-APP_VERSION = "2.7"
+APP_VERSION = "2.9"
 
 # =========================
 # CONFIGURAZIONE FILE / SHEETS
@@ -509,7 +509,7 @@ def genera_html_stampa_sostituzioni(plesso_nome, data_sost, giorno_assente, tabe
         sostituto = html_lib.escape(sost_pulito)
         righe_html += (
             f"<tr><td>{ora}</td><td>{classe}</td>"
-            f"<td>{assente}</td><td>{sostituto}</td></tr>\n"
+            f"<td>{assente}</td><td>{sostituto}</td><td class=\"firma\"></td></tr>\n"
         )
 
     return f"""<!DOCTYPE html>
@@ -525,19 +525,24 @@ def genera_html_stampa_sostituzioni(plesso_nome, data_sost, giorno_assente, tabe
   table {{ width: 100%; border-collapse: collapse; font-size: 1.05em; }}
   th, td {{ border: 1px solid #999; padding: 8px 10px; text-align: left; }}
   th {{ background: #EFE6D3; font-size: 0.95em; text-transform: uppercase; letter-spacing: 0.03em; }}
+  td.firma {{ min-width: 130px; }}
   .piepagina {{ margin-top: 1.2em; font-size: 0.8em; color: #777; }}
   @media print {{ .no-print {{ display: none; }} }}
 </style>
 </head>
 <body>
+  <button class="no-print" onclick="window.print()" style="
+      float:right; padding:0.5em 1em; font-size:0.9em; font-weight:bold;
+      background:#3A2E1F; color:white; border:none; border-radius:8px; cursor:pointer; margin-bottom:0.5em;
+  ">🖨️ Stampa</button>
   <h1>📚 Sostituzioni — {html_lib.escape(plesso_nome)}</h1>
   <p class="sottotitolo">{html_lib.escape(titolo_giorno)}</p>
   <table>
     <thead>
-      <tr><th>Ora</th><th>Classe</th><th>Assente</th><th>Sostituzione</th></tr>
+      <tr><th>Ora</th><th>Classe</th><th>Assente</th><th>Sostituzione</th><th>Firma</th></tr>
     </thead>
     <tbody>
-      {righe_html if righe_html else '<tr><td colspan="4">Nessuna sostituzione da mostrare.</td></tr>'}
+      {righe_html if righe_html else '<tr><td colspan="5">Nessuna sostituzione da mostrare.</td></tr>'}
     </tbody>
   </table>
   <p class="piepagina">Generato automaticamente il {datetime.now().strftime('%d/%m/%Y alle %H:%M')}.</p>
@@ -551,14 +556,13 @@ def pulsante_stampa_sostituzioni(plesso_nome, data_sost, giorno_assente, tabella
 <button id="stampa-sostituzioni-btn" style="
     width:100%; padding:0.7em; font-size:1em; font-weight:bold;
     background:#3A2E1F; color:white; border:none; border-radius:10px; cursor:pointer;
-">🖨️ Stampa / PDF per la bacheca</button>
+">🖨️ Visualizza PDF per la bacheca</button>
 <script>
 document.getElementById('stampa-sostituzioni-btn').addEventListener('click', function() {{
     var finestra = window.open('', '_blank');
     finestra.document.write({pagina_json});
     finestra.document.close();
     finestra.focus();
-    setTimeout(function() {{ finestra.print(); }}, 300);
 }});
 </script>
 """, height=55)
@@ -1192,7 +1196,8 @@ elif menu == "Gestione Assenze":
                 st.markdown(cards_html, unsafe_allow_html=True)
 
                 st.subheader("📝 Sostituzioni in formato testo (mobile/copincolla)")
-                testo_output = "Buongiorno, supplenze.©\n\n"
+                testo_output = f"📅 {giorno_assente} {data_sostituzione.strftime('%d/%m/%Y')}\n"
+                testo_output += "Buongiorno, supplenze.©\n\n"
 
                 for ora, gruppo in sostituzioni_df.groupby("Ora"):
                     gruppo_effettivo = gruppo[
