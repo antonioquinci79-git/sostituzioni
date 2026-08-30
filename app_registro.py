@@ -58,6 +58,10 @@ st.markdown("""
     --dc-bordo: #E3D9C2;
 }
 
+[data-testid="stHeader"] {
+    background: transparent !important;
+}
+
 html, body, [class*="css"] {
     font-size: 17px;
 }
@@ -66,10 +70,6 @@ html, body, [class*="css"] {
     padding-left: 1rem;
     padding-right: 1rem;
     padding-top: calc(3.2rem + env(safe-area-inset-top, 0px));
-}
-
-header[data-testid="stHeader"] {
-    background: #FFFFFF;
 }
 
 .block-container > div:first-child img[alt] {
