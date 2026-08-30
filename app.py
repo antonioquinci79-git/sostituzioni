@@ -58,6 +58,10 @@ st.markdown("""
     --dc-bordo: #E3D9C2;
 }
 
+[data-testid="stHeader"] {
+    background: transparent;
+}
+
 html, body, [class*="css"] {
     font-size: 17px;
 }
