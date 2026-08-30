@@ -1,3 +1,9 @@
+# =========================
+# Gestione Sostituzioni Docenti
+# © 2026 Antonio Quinci
+# Progettato e sviluppato da Antonio Quinci
+# =========================
+
 import streamlit as st
 import pandas as pd
 import re
@@ -664,6 +670,9 @@ def mostra_intestazione():
       </div>
       <div style="font-size:0.95em; color:#9C5F2C; font-weight:600;">
         Gestione sostituzioni docenti
+      </div>
+      <div style="font-size:0.7em; color:#B0A090; margin-top:2px;">
+        Progettato e sviluppato da Antonio Quinci
       </div>
     </div>
   </div>
