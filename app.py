@@ -59,7 +59,7 @@ st.markdown("""
 }
 
 [data-testid="stHeader"] {
-    background: transparent;
+    background: transparent !important;
 }
 
 html, body, [class*="css"] {
@@ -70,10 +70,6 @@ html, body, [class*="css"] {
     padding-left: 1rem;
     padding-right: 1rem;
     padding-top: calc(3.2rem + env(safe-area-inset-top, 0px));
-}
-
-header[data-testid="stHeader"] {
-    background: #FFFFFF;
 }
 
 .block-container > div:first-child img[alt] {
