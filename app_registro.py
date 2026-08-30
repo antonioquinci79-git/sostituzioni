@@ -671,6 +671,9 @@ def mostra_intestazione():
       <div style="font-size:0.95em; color:#9C5F2C; font-weight:600;">
         Gestione sostituzioni docenti
       </div>
+      <div style="font-size:0.7em; color:#B0A090; margin-top:2px;">
+        Progettato e sviluppato da Antonio Quinci
+      </div>
     </div>
   </div>
   <div style="display:flex; flex-direction:column; align-items:center; gap:2px; flex-shrink:0;">
@@ -679,7 +682,6 @@ def mostra_intestazione():
       color:#C97D3D;
     ">🔄</a>
     <span style="font-size:0.7em; color:#B0A090; font-weight:600;">v{APP_VERSION}</span>
-    <span style="font-size:0.65em; color:#B0A090;">by Antonio Quinci</span>
   </div>
 </div>
 """,
