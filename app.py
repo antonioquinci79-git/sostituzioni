@@ -20,7 +20,7 @@ from datetime import datetime
 # =========================
 # VERSIONE APP
 # =========================
-APP_VERSION = "3.3"
+APP_VERSION = "3.4"
 
 # =========================
 # CONFIGURAZIONE FILE / SHEETS
@@ -724,9 +724,6 @@ def mostra_intestazione():
       <div style="font-size:0.95em; color:#9C5F2C; font-weight:600;">
         Gestione sostituzioni docenti
       </div>
-      <div style="font-size:0.7em; color:#B0A090; margin-top:2px;">
-        Progettato e sviluppato da Antonio Quinci
-      </div>
     </div>
   </div>
   <div style="display:flex; flex-direction:column; align-items:center; gap:2px; flex-shrink:0;">
@@ -774,6 +771,7 @@ menu_scelto_label = st.segmented_control(
     list(ETICHETTE_MENU.values()),
     selection_mode="single",
     default="🚨 Assenze",
+    key="menu_nav",
 )
 etichette_inverse = {v: k for k, v in ETICHETTE_MENU.items()}
 menu = etichette_inverse.get(menu_scelto_label)
@@ -1731,3 +1729,40 @@ sotto), non per correggere singoli errori.
   separati (es. `archivio_storico_2025-26`) e **svuota** i fogli attivi, mantenendo
   intatto l'orario. Da fare **una sola volta**, a fine anno scolastico.
         """)
+
+# =========================
+# FOOTER
+# =========================
+st.markdown("<div style='margin-top:1.5rem;'></div>", unsafe_allow_html=True)
+st.divider()
+
+col_f1, col_f2, col_f3 = st.columns(3)
+
+with col_f1:
+    with st.popover("📲 Aggiungi a Home", use_container_width=True):
+        st.markdown("""
+**Su iPhone (Safari)**
+1. Tocca l'icona di condivisione ⬆️ in basso.
+2. Scorri e scegli **"Aggiungi a Home"**.
+3. Conferma: l'icona comparirà sulla schermata Home.
+
+**Su Android (Chrome)**
+1. Tocca i tre puntini ⋮ in alto a destra.
+2. Scegli **"Aggiungi a schermata Home"** (o "Installa app").
+3. Conferma l'aggiunta.
+        """)
+
+with col_f2:
+    if st.button("❓ Guida", use_container_width=True, key="footer_guida_btn"):
+        st.session_state["menu_nav"] = "❓ Guida"
+        st.rerun()
+
+with col_f3:
+    st.markdown(
+        """
+<div style="font-size:0.72em; color:#B0A090; text-align:center; line-height:1.4; padding-top:8px;">
+  Progettato e sviluppato da Antonio Quinci<br>Tutti i diritti riservati
+</div>
+""",
+        unsafe_allow_html=True,
+    )
