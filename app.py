@@ -20,7 +20,7 @@ from datetime import datetime
 # =========================
 # VERSIONE APP
 # =========================
-APP_VERSION = "3.0"
+APP_VERSION = "3.1"
 
 # =========================
 # CONFIGURAZIONE FILE / SHEETS
@@ -752,6 +752,7 @@ ETICHETTE_MENU = {
     "Gestione Assenze":          "🚨 Assenze",
     "Visualizza Orario":         "📅 Vedi",
     "Statistiche":               "📊 Stats",
+    "Guida":                     "❓ Guida",
 }
 
 menu_scelto_label = st.segmented_control(
@@ -1619,3 +1620,100 @@ elif menu == "Statistiche":
                         f"archivio_assenze_{anno_input.strip().replace('/', '-')} "
                         f"sono ora disponibili nel documento Google."
                     )
+
+# --- GUIDA ---
+elif menu == "Guida":
+    st.header("❓ Guida rapida")
+    st.caption("Le procedure principali, la legenda dei colori e come leggere le statistiche.")
+
+    with st.expander("📝 Come modificare l'orario", expanded=False):
+        st.markdown("""
+1. Vai su **📝 Orario**.
+2. Usa il modulo per **aggiungere** una lezione (docente, giorno, ora, classe, tipo).
+3. Nella tabella sottostante puoi **modificare o eliminare** le righe esistenti.
+4. Ricorda di distinguere i docenti di **Sostegno** dai **Curricolari**: questa
+   informazione determina come vengono proposti come sostituti nella sezione Assenze.
+        """)
+
+    with st.expander("🚨 Come registrare una sostituzione", expanded=True):
+        st.markdown("""
+1. Vai su **🚨 Assenze**, scegli data e giorno, e seleziona i **docenti assenti**
+   (o le sole ore, in caso di permesso orario).
+2. Per ogni ora scoperta, l'app propone automaticamente il **miglior sostituto disponibile**
+   (vedi la legenda colori qui sotto per capire come vengono scelti).
+3. Puoi cambiare manualmente il sostituto proposto scegliendolo dal menu a tendina.
+   Scegli **"Nessuno"** se per quell'ora specifica non serve alcuna sostituzione
+   (es. permesso orario, non l'intera giornata): quell'ora non verrà registrata come
+   assenza né segnalata come scoperta.
+4. Premi **✅ Conferma tabella**: l'app controlla eventuali conflitti (stesso docente
+   assegnato a più classi, o un curricolare già impegnato in quell'ora).
+5. Premi **💾 Salva nello storico** per registrare definitivamente su Google Sheets.
+   Se il sistema rileva che le stesse assenze risultano già salvate per quella data,
+   ti avviserà prima di procedere.
+6. Da qui puoi anche **visualizzare il PDF per la bacheca** (con colonna Firma da
+   stampare e far firmare) o **copiare il testo per WhatsApp**.
+        """)
+
+    with st.expander("🎨 Legenda colori — proposta sostituti", expanded=True):
+        def _riga_legenda(colore, icona, titolo, descrizione):
+            st.markdown(f"""
+<div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px;">
+  <div style="background:{colore};color:white;border-radius:8px;padding:4px 10px;
+              font-weight:700;font-size:0.9em;white-space:nowrap;">{icona} {titolo}</div>
+  <div style="padding-top:2px;color:#3A2E1F;">{descrizione}</div>
+</div>""", unsafe_allow_html=True)
+
+        _riga_legenda("#6B8F71", "🔵", "Sostegno",
+                      "Docente di sostegno libero in quell'ora. È la scelta prioritaria "
+                      "quando disponibile nella stessa classe dell'assente.")
+        _riga_legenda("#5E7A93", "🟡", "Uscita",
+                      "Docente curricolare libero perché la sua classe esce anticipatamente "
+                      "in quell'ora.")
+        _riga_legenda("#C97D3D", "🔴", "Curricolare (Occupato)",
+                      "Docente curricolare già impegnato con un'altra classe in quell'ora. "
+                      "Proposto solo se non ci sono alternative migliori: valuta con attenzione "
+                      "prima di confermarlo, perché lascerebbe scoperta la propria classe.")
+        _riga_legenda("#9C9C7A", "🟢", "Non in orario (Libero)",
+                      "Docente senza lezioni previste in quell'ora/giorno secondo l'orario "
+                      "caricato: risulta libero ma va verificata comunque la sua effettiva "
+                      "disponibilità.")
+        st.markdown(
+            "<span style='color:#9C5F2C;font-style:italic;'>— nessuno —</span> "
+            "indica che non è stato scelto alcun sostituto per quell'ora "
+            "(o che hai selezionato \"Nessuno\" perché non serve).",
+            unsafe_allow_html=True
+        )
+
+    with st.expander("📊 Come leggere le statistiche", expanded=False):
+        st.markdown("""
+Nella sezione **📊 Stats** puoi filtrare tutto per **intervallo di date** in alto.
+
+**Statistiche sostituzioni**
+- **🟢 Più sostituzioni**: i 3 docenti che hanno effettuato più ore di sostituzione
+  nel periodo selezionato.
+- **🟠 Meno sostituzioni [S]**: i 3 docenti di **sostegno** con meno ore di sostituzione
+  effettuate, utile per **bilanciare il carico** tra colleghi nel tempo.
+- La tabella e il grafico sottostanti mostrano il totale ore per ogni docente che ha
+  effettuato almeno una sostituzione.
+
+**Statistiche assenze**
+- **🟠 Più assenze**: i 3 docenti con più ore/giorni di assenza registrati nel periodo.
+- La tabella mostra, per ogni docente, sia il **totale ore assenti** sia i
+  **giorni distinti** in cui è risultato assente (un docente assente 3 ore nello stesso
+  giorno conta 3 ore ma 1 giorno).
+
+⚠️ Le due sezioni "Azzeramento storico" cancellano **definitivamente** i dati da Google
+Sheets: usale solo a fine anno scolastico (idealmente dopo aver archiviato l'anno, vedi
+sotto), non per correggere singoli errori.
+        """)
+
+    with st.expander("💾 Backup, export e archiviazione", expanded=False):
+        st.markdown("""
+- **Report Excel**: scarica tutti i dati (orario, storico, assenze) organizzati su
+  fogli distinti, pronto per essere condiviso o archiviato fuori da Google Sheets.
+- **Backup ZIP**: copia grezza dei fogli, utile come salvataggio di sicurezza prima di
+  operazioni delicate (es. azzeramento storico).
+- **Archivia anno scolastico**: copia storico e assenze dell'anno corrente in fogli
+  separati (es. `archivio_storico_2025-26`) e **svuota** i fogli attivi, mantenendo
+  intatto l'orario. Da fare **una sola volta**, a fine anno scolastico.
+        """)
