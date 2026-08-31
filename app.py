@@ -20,7 +20,7 @@ from datetime import datetime
 # =========================
 # VERSIONE APP
 # =========================
-APP_VERSION = "3.2"
+APP_VERSION = "3.3"
 
 # =========================
 # CONFIGURAZIONE FILE / SHEETS
@@ -43,6 +43,12 @@ except KeyError:
         "plesso_name      = \"Plesso Centrale\"\n```"
     )
     st.stop()
+
+st.set_page_config(
+    page_title=f"Sostituzioni — {PLESSO_NAME}",
+    page_icon="📚",
+    layout="centered",
+)
 
 # =========================
 # STILI PERSONALIZZATI
