@@ -20,7 +20,7 @@ from datetime import datetime
 # =========================
 # VERSIONE APP
 # =========================
-APP_VERSION = "3.1"
+APP_VERSION = "3.2"
 
 # =========================
 # CONFIGURAZIONE FILE / SHEETS
@@ -254,6 +254,8 @@ def salva_orario(df):
         df_to_save = df_to_save[REQUIRED_COLUMNS]
         gd.set_with_dataframe(ws, df_to_save, include_index=False, include_column_header=True)
         carica_orario.clear()
+        create_backup.clear()
+        create_excel_export.clear()
         return True
     except Exception as e:
         st.error(f"Errore nel salvataggio dell'orario su Google Sheets: {e}")
@@ -369,6 +371,8 @@ def salva_storico_assenze(data_sostituzione, giorno_assente, sostituzioni_df, or
             ws_assenze.append_rows(assenze_data, value_input_option="USER_ENTERED")
 
         carica_statistiche.clear()
+        create_backup.clear()
+        create_excel_export.clear()
         return True
     except Exception as e:
         st.error(f"Errore durante il salvataggio dei dati su Google Sheets: {e}")
@@ -386,6 +390,8 @@ def clear_sheet_content(sheet_name):
             carica_statistiche.clear()
         elif sheet_name == ORARIO_SHEET:
             carica_orario.clear()
+        create_backup.clear()
+        create_excel_export.clear()
         return True
     except Exception as e:
         st.error(f"Errore nell'azzeramento del foglio {sheet_name}: {e}")
@@ -429,6 +435,7 @@ def archivia_anno_scolastico(anno: str):
 # =========================
 # BACKUP ZIP ED EXPORT EXCEL (.xlsx)
 # =========================
+@st.cache_data(ttl=300, show_spinner=False)
 def create_backup():
     try:
         ws_orario = get_worksheet(ORARIO_SHEET)
@@ -452,6 +459,7 @@ def create_backup():
         st.error(f"Errore durante la creazione del backup: {e}")
         return None
 
+@st.cache_data(ttl=300, show_spinner=False)
 def create_excel_export():
     try:
         ws_orario = get_worksheet(ORARIO_SHEET)
