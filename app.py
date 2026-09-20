@@ -1726,6 +1726,22 @@ elif menu == "Guida":
 3. Nella tabella sottostante puoi **modificare o eliminare** le righe esistenti.
 4. Ricorda di distinguere i docenti di **Sostegno** dai **Curricolari**: questa
    informazione determina come vengono proposti come sostituti nella sezione Assenze.
+
+**🟣 Ore a disposizione (D)**
+
+Sono ore di servizio in cui il docente **non ha una classe** e può quindi fare
+sostituzioni. Valgono sia per i curricolari sia per i docenti di sostegno.
+- **Nel modulo** di inserimento spunta **"Ora a disposizione (D)"**: la scelta della
+  classe scompare. Il **Tipo** (Lezione/Sostegno) resta quello del docente.
+- **Nella tabella** spunta la colonna **Disposizione**: la Classe di quella riga si
+  svuota da sola. Per trasformare in D un'ora già presente basta spuntarla e salvare.
+- Ogni riga deve avere **o una Classe o la spunta Disposizione**, altrimenti il
+  salvataggio viene bloccato e ti viene mostrato l'elenco delle righe da correggere.
+- Un docente non può avere una D e una classe nella **stessa ora** (vale il solito
+  controllo dei conflitti).
+- Nella vista **👁️ Visualizza Orario** le ore D compaiono nella colonna **D**, in fondo
+  alla griglia, così vedi subito chi è a disposizione in ogni ora.
+- Nei **CSV** importati la colonna `Disposizione` è facoltativa (valori TRUE/FALSE).
         """)
 
     with st.expander("🚨 Come registrare una sostituzione", expanded=True):
@@ -1733,7 +1749,9 @@ elif menu == "Guida":
 1. Vai su **🚨 Assenze**, scegli data e giorno, e seleziona i **docenti assenti**
    (o le sole ore, in caso di permesso orario).
 2. Per ogni ora scoperta, l'app propone automaticamente il **miglior sostituto disponibile**
-   (vedi la legenda colori qui sotto per capire come vengono scelti).
+   (vedi la legenda colori qui sotto per capire come vengono scelti). I docenti
+   **a disposizione (D)** in quell'ora sono proposti per primi. Le ore D di un docente
+   assente **non** risultano scoperte, perché non c'è nessuna classe da coprire.
 3. Puoi cambiare manualmente il sostituto proposto scegliendolo dal menu a tendina.
    Scegli **"Nessuno"** se per quell'ora specifica non serve alcuna sostituzione
    (es. permesso orario, non l'intera giornata): quell'ora non verrà registrata come
@@ -1756,9 +1774,14 @@ elif menu == "Guida":
   <div style="padding-top:2px;color:#3A2E1F;">{descrizione}</div>
 </div>""", unsafe_allow_html=True)
 
+        _riga_legenda("#7A6A99", "🟣", "A disposizione (D)",
+                      "Docente (curricolare o di sostegno) in servizio ma senza classe in "
+                      "quell'ora. È la scelta prioritaria: se più assenti hanno la stessa ora "
+                      "scoperta, l'app propone docenti D diversi.")
         _riga_legenda("#6B8F71", "🔵", "Sostegno",
-                      "Docente di sostegno libero in quell'ora. È la scelta prioritaria "
-                      "quando disponibile nella stessa classe dell'assente.")
+                      "Docente di sostegno libero in quell'ora. Viene subito dopo i docenti "
+                      "a disposizione, ed è la scelta prioritaria quando è nella stessa "
+                      "classe dell'assente.")
         _riga_legenda("#5E7A93", "🟡", "Uscita",
                       "Docente curricolare libero perché la sua classe esce anticipatamente "
                       "in quell'ora.")
@@ -1787,7 +1810,8 @@ Nella sezione **📊 Stats** puoi filtrare tutto per **intervallo di date** in a
 - **🟠 Meno sostituzioni [S]**: i 3 docenti di **sostegno** con meno ore di sostituzione
   effettuate, utile per **bilanciare il carico** tra colleghi nel tempo.
 - La tabella e il grafico sottostanti mostrano il totale ore per ogni docente che ha
-  effettuato almeno una sostituzione.
+  effettuato almeno una sostituzione. Le sostituzioni fatte da docenti a
+  disposizione (D) contano come tutte le altre.
 
 **Statistiche assenze**
 - **🟠 Più assenze**: i 3 docenti con più ore/giorni di assenza registrati nel periodo.
