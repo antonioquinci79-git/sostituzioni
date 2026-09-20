@@ -20,12 +20,14 @@ from datetime import datetime
 # =========================
 # VERSIONE APP
 # =========================
-APP_VERSION = "3.3"
+APP_VERSION = "3.4"
 
 # =========================
 # CONFIGURAZIONE FILE / SHEETS
 # =========================
-REQUIRED_COLUMNS    = ["Docente", "Giorno", "Ora", "Classe", "Tipo", "Escludi"]
+REQUIRED_COLUMNS    = ["Docente", "Giorno", "Ora", "Classe", "Tipo", "Disposizione", "Escludi"]
+# Colonne facoltative nei CSV importati (se mancano valgono False)
+COLONNE_OPZIONALI   = ["Disposizione", "Escludi"]
 ORARIO_SHEET        = "orario"
 STORICO_SHEET       = "storico"
 ASSENZE_SHEET       = "assenze"
@@ -226,6 +228,22 @@ def ensure_sheets_exist():
         get_worksheet(nome_foglio)
 
 # =========================
+# HELPER ORE A DISPOSIZIONE (D)
+# =========================
+def _serie_bool(serie):
+    """Converte una colonna (bool, TRUE/FALSE, vuoti, NaN...) in bool."""
+    if serie.dtype == bool:
+        return serie
+    vere = {"true", "1", "1.0", "vero", "si", "sì", "x", "yes"}
+    return serie.map(lambda v: str(v).strip().lower() in vere).astype(bool)
+
+def righe_senza_classe(df):
+    """Righe che non hanno una classe e non sono ore a disposizione."""
+    if df.empty:
+        return df
+    return df[(df["Classe"].astype(str).str.strip() == "") & (~_serie_bool(df["Disposizione"]))]
+
+# =========================
 # CARICAMENTO / SALVATAGGIO ORARIO
 # =========================
 @st.cache_data(ttl=300, show_spinner=False)
@@ -243,7 +261,9 @@ def carica_orario():
         else:
             df["Escludi"] = False
         for col in ["Tipo", "Docente", "Giorno", "Ora", "Classe"]:
-            df[col] = df[col].astype(str).str.strip().fillna("")
+            df[col] = df[col].fillna("").astype(str).str.strip()
+        df["Disposizione"] = _serie_bool(df["Disposizione"])
+        df.loc[df["Disposizione"], "Classe"] = ""
         df = df.loc[:, REQUIRED_COLUMNS]
         return df
     except Exception as e:
@@ -257,6 +277,8 @@ def salva_orario(df):
         for col in REQUIRED_COLUMNS:
             if col not in df_to_save.columns:
                 df_to_save[col] = ""
+        df_to_save["Disposizione"] = _serie_bool(df_to_save["Disposizione"])
+        df_to_save.loc[df_to_save["Disposizione"], "Classe"] = ""
         df_to_save = df_to_save[REQUIRED_COLUMNS]
         gd.set_with_dataframe(ws, df_to_save, include_index=False, include_column_header=True)
         carica_orario.clear()
@@ -512,8 +534,16 @@ def trova_conflitti_orario(df):
     conteggi = df.groupby(["Docente", "Giorno", "Ora"]).size()
     return [idx for idx, n in conteggi.items() if n > 1 and idx[0].strip() != ""]
 
+def _nome_da_label(label):
+    """Toglie tag ([S], [C], [D], [NP], [USCITA]) ed emoji da un'etichetta sostituto."""
+    nome = re.sub(r"\[(?:S|C|D|NP|USCITA)\]\s*", "", str(label))
+    nome = re.sub(r"[🔵🟡🟢🔴🟣]\s*", "", nome)
+    return nome.strip()
+
 def _colore_tipo(label):
-    if "[S]" in label and "[NP]" not in label:
+    if "[D]" in label:
+        return "#7A6A99", "white", "🟣"
+    elif "[S]" in label and "[NP]" not in label:
         return "#6B8F71", "white", "🔵"
     elif "[C] [USCITA]" in label:
         return "#5E7A93", "white", "🟡"
@@ -527,10 +557,7 @@ def _badge_sostituto(label):
     if label == "Nessuno":
         return '<span style="color:#9C5F2C;font-style:italic;">— nessuno —</span>'
     bg, fg, _ = _colore_tipo(label)
-    nome = (label.replace("[S] [NP] ", "").replace("[C] [NP] ", "")
-                 .replace("[C] [USCITA] ", "").replace("[S] ", "")
-                 .replace("[C] ", "").replace("🔵 ", "").replace("🟡 ", "")
-                 .replace("🟢 ", "").replace("🔴 ", "").strip())
+    nome = _nome_da_label(label)
     return (f'<span style="background:{bg};color:{fg};border-radius:8px;'
             f'padding:3px 10px;font-weight:700;font-size:0.9em;">{nome}</span>')
 
@@ -555,10 +582,7 @@ def genera_html_stampa_sostituzioni(plesso_nome, data_sost, giorno_assente, tabe
 
     for _, r in tabella_ordinata.iterrows():
         sost_raw = str(r["Sostituzione"])
-        sost_pulito = (sost_raw.replace("[S] [NP] ", "").replace("[C] [NP] ", "")
-                                .replace("[C] [USCITA] ", "").replace("[S] ", "")
-                                .replace("[C] ", "").replace("🔵 ", "").replace("🟡 ", "")
-                                .replace("🟢 ", "").replace("🔴 ", "").strip())
+        sost_pulito = _nome_da_label(sost_raw)
         if sost_pulito in ("Nessuno", "", "—"):
             continue
 
@@ -787,7 +811,8 @@ if menu == "Inserisci/Modifica Orario":
         df_tmp = pd.read_csv(uploaded_file)
         
         # MAPPING GUIDATO DELLE COLONNE
-        if not all(col in df_tmp.columns for col in REQUIRED_COLUMNS):
+        colonne_csv = [c for c in REQUIRED_COLUMNS if c != "Disposizione"]  # Disposizione è facoltativa
+        if not all(col in df_tmp.columns for col in colonne_csv):
             st.info("💡 Mappa le colonne del tuo file CSV con le voci richieste dal sistema:")
             col_map = {}
             cols_csv = ["-- Seleziona --"] + list(df_tmp.columns)
@@ -801,7 +826,7 @@ if menu == "Inserisci/Modifica Orario":
                 col_map[req_col] = st.selectbox(f"Colonna per **{req_col}**", cols_csv, index=default_idx, key=f"map_{req_col}")
             
             if st.button("Importa con questo mapping", type="primary"):
-                if any(v == "-- Seleziona --" for k, v in col_map.items() if k != "Escludi"):
+                if any(v == "-- Seleziona --" for k, v in col_map.items() if k not in COLONNE_OPZIONALI):
                     st.error("Associa tutte le colonne obbligatorie prima di procedere.")
                 else:
                     df_nuovo = pd.DataFrame()
@@ -809,12 +834,13 @@ if menu == "Inserisci/Modifica Orario":
                         if col_map[req_col] != "-- Seleziona --":
                             df_nuovo[req_col] = df_tmp[col_map[req_col]]
                         else:
-                            df_nuovo[req_col] = False if req_col == "Escludi" else ""
+                            df_nuovo[req_col] = False if req_col in COLONNE_OPZIONALI else ""
                     
                     for col in ["Docente", "Giorno", "Ora", "Classe", "Tipo"]:
-                        df_nuovo[col] = df_nuovo[col].astype(str).str.strip()
-                    if "Escludi" in df_nuovo.columns:
-                        df_nuovo["Escludi"] = df_nuovo["Escludi"].astype(bool)
+                        df_nuovo[col] = df_nuovo[col].fillna("").astype(str).str.strip()
+                    df_nuovo["Escludi"] = _serie_bool(df_nuovo["Escludi"])
+                    df_nuovo["Disposizione"] = _serie_bool(df_nuovo["Disposizione"])
+                    df_nuovo.loc[df_nuovo["Disposizione"], "Classe"] = ""
 
                     valori_non_validi = df_nuovo[
                         ~df_nuovo["Giorno"].isin(GIORNI_SETTIMANA) | ~df_nuovo["Ora"].isin(ORE_LEZIONE)
@@ -829,15 +855,25 @@ if menu == "Inserisci/Modifica Orario":
                         st.error("Il CSV contiene docenti assegnati a più classi nella stessa ora:")
                         for docente, giorno, ora in conflitti_csv:
                             st.write(f"- {docente}: {giorno} ora {ora}")
+                    elif not righe_senza_classe(df_nuovo).empty:
+                        st.error("Alcune righe non hanno la Classe: indicala oppure segna l'ora come Disposizione.")
+                        st.dataframe(righe_senza_classe(df_nuovo)[["Docente", "Giorno", "Ora"]],
+                                     use_container_width=True, hide_index=True)
                     else:
                         orario_df = df_nuovo
                         if salva_orario(orario_df):
                             st.success("Orario caricato con successo ✅")
                             st.rerun()
         else:
-            df_nuovo = df_tmp[REQUIRED_COLUMNS].copy()
+            df_nuovo = df_tmp[colonne_csv].copy()
+            df_nuovo["Disposizione"] = (
+                _serie_bool(df_tmp["Disposizione"]) if "Disposizione" in df_tmp.columns else False
+            )
+            df_nuovo = df_nuovo[REQUIRED_COLUMNS]
             for col in ["Docente", "Giorno", "Ora", "Classe", "Tipo"]:
-                df_nuovo[col] = df_nuovo[col].astype(str).str.strip()
+                df_nuovo[col] = df_nuovo[col].fillna("").astype(str).str.strip()
+            df_nuovo["Disposizione"] = _serie_bool(df_nuovo["Disposizione"])
+            df_nuovo.loc[df_nuovo["Disposizione"], "Classe"] = ""
             valori_non_validi = df_nuovo[
                 ~df_nuovo["Giorno"].isin(GIORNI_SETTIMANA) | ~df_nuovo["Ora"].isin(ORE_LEZIONE)
             ]
@@ -849,6 +885,10 @@ if menu == "Inserisci/Modifica Orario":
                 st.error("Conflitti trovati nel CSV:")
                 for docente, giorno, ora in conflitti_csv:
                     st.write(f"- {docente}: {giorno} ora {ora}")
+            elif not righe_senza_classe(df_nuovo).empty:
+                st.error("Alcune righe non hanno la Classe: indicala oppure segna l'ora come Disposizione.")
+                st.dataframe(righe_senza_classe(df_nuovo)[["Docente", "Giorno", "Ora"]],
+                             use_container_width=True, hide_index=True)
             else:
                 orario_df = df_nuovo
                 if salva_orario(orario_df):
@@ -865,23 +905,35 @@ if menu == "Inserisci/Modifica Orario":
             docente = st.text_input("Inserisci nuovo docente")
         giorno = st.selectbox("Giorno", GIORNI_SETTIMANA)
         ora = st.selectbox("Ora", ORE_LEZIONE)
-        classe = st.selectbox(
-            "Classe",
-            ["➕ Nuova classe"] + (sorted(orario_df["Classe"].unique()) if not orario_df.empty else []),
-            key="classe_input"
+        disposizione = st.checkbox(
+            "🟣 Ora a disposizione (D)",
+            key="disposizione_input",
+            help="Il docente è in servizio ma non ha una classe: sarà proposto per primo come sostituto."
         )
-        if classe == "➕ Nuova classe":
-            classe = st.text_input("Inserisci nuova classe")
+        if disposizione:
+            classe = ""
+            st.caption("Nessuna classe: il Tipo (Lezione/Sostegno) resta quello del docente.")
+        else:
+            classe = st.selectbox(
+                "Classe",
+                ["➕ Nuova classe"] + (
+                    sorted(c for c in orario_df["Classe"].unique() if c) if not orario_df.empty else []
+                ),
+                key="classe_input"
+            )
+            if classe == "➕ Nuova classe":
+                classe = st.text_input("Inserisci nuova classe")
         tipo = st.selectbox("Tipo", TIPI_LEZIONE)
         escludi = st.checkbox("Escludi da sostituzioni")
         if st.button("Aggiungi", key="add_lesson", type="primary"):
-            if docente and giorno and ora and classe and tipo:
+            if docente and giorno and ora and tipo and (classe or disposizione):
                 row = {
                     "Docente": docente,
                     "Giorno": giorno,
                     "Ora": ora,
                     "Classe": classe,
                     "Tipo": tipo,
+                    "Disposizione": disposizione,
                     "Escludi": escludi
                 }
                 nuovo = pd.DataFrame([row])
@@ -916,17 +968,31 @@ if menu == "Inserisci/Modifica Orario":
                 "Tipo": st.column_config.SelectboxColumn("Tipo", options=TIPI_LEZIONE, required=True),
                 "Escludi": st.column_config.CheckboxColumn("Escludi"),
                 "Docente": st.column_config.TextColumn("Docente", required=True),
-                "Classe": st.column_config.TextColumn("Classe", required=True),
+                "Classe": st.column_config.TextColumn(
+                    "Classe",
+                    help="Lascia vuoto se l'ora è a disposizione (spunta Disposizione)."
+                ),
+                "Disposizione": st.column_config.CheckboxColumn(
+                    "Disposizione",
+                    help="Ora a disposizione (D): in servizio senza classe, utilizzabile per sostituzioni."
+                ),
             }
         )
         if st.button("Salva modifiche", type="primary"):
             df_da_salvare = edited_df.copy()
             for col in ["Docente", "Giorno", "Ora", "Classe", "Tipo"]:
-                df_da_salvare[col] = df_da_salvare[col].astype(str).str.strip()
+                df_da_salvare[col] = df_da_salvare[col].fillna("").astype(str).str.strip()
+            df_da_salvare["Disposizione"] = _serie_bool(df_da_salvare["Disposizione"])
+            df_da_salvare.loc[df_da_salvare["Disposizione"], "Classe"] = ""
             df_da_salvare = df_da_salvare[df_da_salvare["Docente"] != ""].copy()
 
             conflitti_edit = trova_conflitti_orario(df_da_salvare)
-            if conflitti_edit:
+            senza_classe_edit = righe_senza_classe(df_da_salvare)
+            if not senza_classe_edit.empty:
+                st.error("Impossibile salvare: indica la Classe oppure spunta Disposizione per queste righe:")
+                st.dataframe(senza_classe_edit[["Docente", "Giorno", "Ora"]],
+                             use_container_width=True, hide_index=True)
+            elif conflitti_edit:
                 st.error("Impossibile salvare: lo stesso docente è assegnato a più classi nella stessa ora:")
                 for docente, giorno, ora in conflitti_edit:
                     st.write(f"- {docente}: {giorno} ora {ora}")
@@ -965,7 +1031,7 @@ elif menu == "Gestione Assenze":
                 "quell'ora avrebbero lezione con quella classe risultano liberi e "
                 "selezionabili come sostituti, senza generare un conflitto alla conferma."
             )
-            classi_disponibili = sorted(orario_df["Classe"].unique()) if not orario_df.empty else []
+            classi_disponibili = sorted(c for c in orario_df["Classe"].unique() if c) if not orario_df.empty else []
             classi_uscita_selezionate = st.multiselect(
                 "Classi in uscita",
                 classi_disponibili,
@@ -992,9 +1058,11 @@ elif menu == "Gestione Assenze":
         if not docenti_assenti:
             st.info("Seleziona almeno un docente per continuare.")
         else:
+            # Le ore a disposizione (D) di un assente non lasciano classi scoperte
             ore_assenti = orario_df[
                 (orario_df["Docente"].isin(docenti_assenti)) &
-                (orario_df["Giorno"] == giorno_assente)
+                (orario_df["Giorno"] == giorno_assente) &
+                (~orario_df["Disposizione"])
             ].copy()
 
             if ore_assenti.empty:
@@ -1067,10 +1135,19 @@ elif menu == "Gestione Assenze":
                         (~orario_df["Docente"].isin(docenti_assenti_set))
                     ].copy()
 
+                    # presenti_ora include anche chi è a disposizione, così non finisce tra i [NP]
                     presenti_ora = list(dict.fromkeys(presenti_ora_df["Docente"].tolist()))
+
+                    # Separo i docenti a disposizione (D) da quelli con una classe
+                    mask_d = presenti_ora_df["Disposizione"]
+                    docenti_disp = sorted(presenti_ora_df[mask_d]["Docente"].unique().tolist())
+                    presenti_ora_df = presenti_ora_df[~mask_d].copy()
 
                     added = set()
                     options = ["Nessuno"]
+
+                    for d in docenti_disp:
+                        options.append(f"🟣 [D] {d}"); added.add(d)
 
                     same_class_sost = presenti_ora_df[
                         (presenti_ora_df["Tipo"].str.lower() == "sostegno") &
@@ -1148,7 +1225,12 @@ elif menu == "Gestione Assenze":
                         options.append(label); added.add(d)
 
                     proposto_display = "Nessuno"
-                    if len(same_class_sost) > 0:
+                    # D: evito di proporre lo stesso docente a due assenti nella stessa ora
+                    gia_scelti_ora = {x["Sostituto"] for x in sostituzioni if x["Ora"] == ora}
+                    d_liberi = [d for d in docenti_disp if d not in gia_scelti_ora]
+                    if len(d_liberi) > 0:
+                        proposto_display = f"🟣 [D] {d_liberi[0]}"
+                    elif len(same_class_sost) > 0:
                         proposto_display = f"🔵 [S] {sorted(same_class_sost)[0]}"
                     elif len(other_sost) > 0:
                         proposto_display = f"🔵 [S] {sorted(other_sost)[0]}"
@@ -1187,7 +1269,8 @@ elif menu == "Gestione Assenze":
 
                     bg2, fg2, ico2 = _colore_tipo(scelta)
                     tipo_label = (
-                        "Sostegno" if "[S]" in scelta and "[NP]" not in scelta
+                        "A disposizione" if "[D]" in scelta
+                        else "Sostegno" if "[S]" in scelta and "[NP]" not in scelta
                         else "Uscita" if "[USCITA]" in scelta
                         else "Non in orario (Libero)" if "[NP]" in scelta
                         else "Curricolare (Occupato)" if "[C]" in scelta
@@ -1206,16 +1289,7 @@ elif menu == "Gestione Assenze":
                     if scelta == "Nessuno":
                         nome_pulito = "Nessuno"
                     else:
-                        nome_pulito = (
-                            scelta.replace("[S] [NP] ", "")
-                                  .replace("[C] [NP] ", "")
-                                  .replace("[C] [USCITA] ", "")
-                                  .replace("[S] ", "")
-                                  .replace("[C] ", "")
-                                  .replace("🔵 ", "").replace("🟡 ", "")
-                                  .replace("🟢 ", "").replace("🔴 ", "")
-                                  .strip()
-                        )
+                        nome_pulito = _nome_da_label(scelta)
 
                     sostituzioni.append({
                         "Ora": ora,
@@ -1325,7 +1399,8 @@ document.getElementById('copia-sostituzioni-btn').addEventListener('click', func
                                 lezione_in_quell_ora = orario_df[
                                     (orario_df["Docente"] == s) &
                                     (orario_df["Giorno"] == giorno_assente) &
-                                    (orario_df["Ora"] == ora_val)
+                                    (orario_df["Ora"] == ora_val) &
+                                    (~orario_df["Disposizione"])
                                 ]
                                 if not lezione_in_quell_ora.empty:
                                     classe_lezione = lezione_in_quell_ora.iloc[0]["Classe"]
@@ -1398,23 +1473,27 @@ elif menu == "Visualizza Orario":
     if orario_df.empty:
         st.warning("Nessun orario disponibile.")
     else:
+        # Nella vista le ore a disposizione compaiono come colonna/filtro "D"
+        orario_vista = orario_df.copy()
+        orario_vista.loc[orario_vista["Disposizione"], "Classe"] = "D"
+
         col_f1, col_f2 = st.columns(2)
         with col_f1:
             docenti_selezionati = st.multiselect(
                 "🔍 Filtra per Docente",
-                sorted(orario_df["Docente"].unique())
+                sorted(orario_vista["Docente"].unique())
             )
         with col_f2:
             classi_selezionate = st.multiselect(
                 "🏫 Filtra per Classe",
-                sorted(orario_df["Classe"].unique())
+                sorted(c for c in orario_vista["Classe"].unique() if c)
             )
 
-        df_filtrato = orario_df.copy()
+        df_filtrato = orario_vista.copy()
 
         if docenti_selezionati:
             df_base = df_filtrato[df_filtrato["Docente"].isin(docenti_selezionati)]
-            chiavi = df_base[["Classe", "Giorno", "Ora"]].drop_duplicates()
+            chiavi = df_base[~df_base["Disposizione"]][["Classe", "Giorno", "Ora"]].drop_duplicates()
             df_compresenze = df_filtrato[
                 df_filtrato["Tipo"].str.lower() == "sostegno"
             ].merge(chiavi, on=["Classe", "Giorno", "Ora"], how="inner")
