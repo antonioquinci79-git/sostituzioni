@@ -577,6 +577,15 @@ def download_orario(df):
 # =========================
 # ESPORTAZIONE ORARIO IN PDF (una pagina per classe)
 # =========================
+def _curricolare_prima_del_sostegno(df):
+    """Ordina (in modo stabile) le righe: prima i docenti curricolari, poi il sostegno."""
+    if df.empty:
+        return df
+    e_sostegno = df["Tipo"].astype(str).str.strip().str.lower().eq("sostegno")
+    return df.assign(_ord_tipo=e_sostegno.astype(int)).sort_values(
+        "_ord_tipo", kind="stable"
+    ).drop(columns="_ord_tipo")
+
 def _ordina_classi(classe):
     """Stessa logica di ordinamento della vista 'Vedi' (D e classi anomale in fondo)."""
     m = re.match(r"(\d+)\s*([A-Za-zÀ-ÖØ-öø-ÿ]+)", str(classe))
@@ -589,7 +598,7 @@ def _prepara_df_per_pdf(df):
     d = df.copy()
     d.loc[d["Disposizione"], "Classe"] = "D"
     d = d[d["Classe"].astype(str).str.strip() != ""]
-    return d
+    return _curricolare_prima_del_sostegno(d)
 
 def _pagina_classe_pdf(classe, df_classe, plesso_nome, data_gen):
     """Restituisce gli 'flowables' reportlab di una pagina (una classe)."""
@@ -836,7 +845,7 @@ def vista_pivot_docenti(df, mode="docenti"):
         st.dataframe(styled, use_container_width=True)
 
     elif mode == "classi":
-        dfp = df.copy()
+        dfp = _curricolare_prima_del_sostegno(df.copy())
         dfp["Info"] = dfp["Docente"]
 
         pivot = dfp.pivot_table(
