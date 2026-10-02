@@ -574,6 +574,157 @@ def download_orario(df):
             mime="text/csv"
         )
 
+# =========================
+# ESPORTAZIONE ORARIO IN PDF (una pagina per classe)
+# =========================
+def _ordina_classi(classe):
+    """Stessa logica di ordinamento della vista 'Vedi' (D e classi anomale in fondo)."""
+    m = re.match(r"(\d+)\s*([A-Za-zÀ-ÖØ-öø-ÿ]+)", str(classe))
+    if m:
+        return (int(m.group(1)), m.group(2).upper())
+    return (10**9, str(classe))
+
+def _prepara_df_per_pdf(df):
+    """Come nella vista 'Vedi': le ore a disposizione diventano la classe 'D'."""
+    d = df.copy()
+    d.loc[d["Disposizione"], "Classe"] = "D"
+    d = d[d["Classe"].astype(str).str.strip() != ""]
+    return d
+
+def _pagina_classe_pdf(classe, df_classe, plesso_nome, data_gen):
+    """Restituisce gli 'flowables' reportlab di una pagina (una classe)."""
+    from reportlab.lib import colors
+    from reportlab.lib.units import cm
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT
+    from reportlab.platypus import Paragraph, Table, TableStyle, Spacer
+
+    marrone_scuro = colors.HexColor("#3A2E1F")
+    marrone       = colors.HexColor("#9C5F2C")
+    crema         = colors.HexColor("#EFE6D3")
+    crema_chiaro  = colors.HexColor("#FBF4E6")
+    bordo         = colors.HexColor("#E3D9C2")
+
+    st_titolo = ParagraphStyle("titolo", fontName="Helvetica-Bold", fontSize=22,
+                               textColor=marrone_scuro, alignment=TA_LEFT, leading=26)
+    st_sotto  = ParagraphStyle("sotto", fontName="Helvetica", fontSize=11,
+                               textColor=marrone, alignment=TA_LEFT, leading=14)
+    st_head   = ParagraphStyle("head", fontName="Helvetica-Bold", fontSize=12,
+                               textColor=crema, alignment=TA_CENTER, leading=14)
+    st_ora    = ParagraphStyle("ora", fontName="Helvetica-Bold", fontSize=14,
+                               textColor=marrone_scuro, alignment=TA_CENTER, leading=16)
+    st_cella  = ParagraphStyle("cella", fontName="Helvetica", fontSize=11,
+                               textColor=marrone_scuro, alignment=TA_CENTER, leading=14)
+
+    def esc(t):
+        return html_lib.escape(str(t))
+
+    if classe == "D":
+        titolo = "Docenti a disposizione (D)"
+    else:
+        titolo = f"Classe {classe}"
+
+    # (Giorno, Ora) -> docenti unici, nell'ordine in cui compaiono (come in 'Vedi')
+    celle = {}
+    for (g, o), gr in df_classe.groupby(["Giorno", "Ora"], sort=False):
+        celle[(g, o)] = list(dict.fromkeys(gr["Docente"].astype(str).str.strip()))
+
+    dati = [[Paragraph("", st_head)] + [Paragraph(esc(g), st_head) for g in GIORNI_SETTIMANA]]
+    for ora in ORE_LEZIONE:
+        riga = [Paragraph(esc(ora), st_ora)]
+        for g in GIORNI_SETTIMANA:
+            docenti = [d for d in celle.get((g, ora), []) if d]
+            riga.append(Paragraph(esc(" / ".join(docenti)), st_cella) if docenti else "")
+        dati.append(riga)
+
+    larghezza_utile = 29.7 * cm - 3 * cm
+    col_ora = 2.2 * cm
+    col_g = (larghezza_utile - col_ora) / len(GIORNI_SETTIMANA)
+    tabella = Table(
+        dati,
+        colWidths=[col_ora] + [col_g] * len(GIORNI_SETTIMANA),
+        rowHeights=[1.0 * cm] + [2.1 * cm] * len(ORE_LEZIONE),
+    )
+    tabella.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), marrone_scuro),
+        ("BACKGROUND", (0, 1), (0, -1), crema),
+        ("BACKGROUND", (1, 1), (-1, -1), crema_chiaro),
+        ("GRID", (0, 0), (-1, -1), 0.8, bordo),
+        ("BOX", (0, 0), (-1, -1), 1.2, marrone_scuro),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+    ]))
+
+    return [
+        Paragraph(esc(titolo), st_titolo),
+        Paragraph(f"{esc(plesso_nome)} &nbsp;·&nbsp; Orario settimanale &nbsp;·&nbsp; aggiornato al {data_gen}", st_sotto),
+        Spacer(1, 0.6 * cm),
+        tabella,
+    ]
+
+@st.cache_data(ttl=300, show_spinner=False)
+def genera_pdf_orario(df, plesso_nome, classi=None):
+    """PDF unico (A4 orizzontale) con una pagina per classe. Restituisce bytes oppure None."""
+    try:
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.platypus import SimpleDocTemplate, PageBreak
+        from reportlab.lib.units import cm
+
+        dfp = _prepara_df_per_pdf(df)
+        if dfp.empty:
+            return None
+        tutte = sorted(dfp["Classe"].unique(), key=_ordina_classi)
+        elenco = [c for c in tutte if (not classi) or c in classi]
+        if not elenco:
+            return None
+
+        data_gen = datetime.now().strftime("%d/%m/%Y")
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buf, pagesize=landscape(A4),
+            leftMargin=1.5 * cm, rightMargin=1.5 * cm,
+            topMargin=1.5 * cm, bottomMargin=1.5 * cm,
+            title=f"Orario {plesso_nome}", author=plesso_nome,
+        )
+        story = []
+        for i, c in enumerate(elenco):
+            if i > 0:
+                story.append(PageBreak())
+            story += _pagina_classe_pdf(c, dfp[dfp["Classe"] == c], plesso_nome, data_gen)
+        doc.build(story)
+        return buf.getvalue()
+    except ImportError:
+        st.error("Per esportare in PDF serve la libreria 'reportlab': aggiungila a requirements.txt.")
+        return None
+    except Exception as e:
+        st.error(f"Errore durante la generazione del PDF: {e}")
+        return None
+
+@st.cache_data(ttl=300, show_spinner=False)
+def genera_zip_pdf_classi(df, plesso_nome, classi=None):
+    """ZIP con un PDF separato per ciascuna classe. Restituisce bytes oppure None."""
+    try:
+        dfp = _prepara_df_per_pdf(df)
+        if dfp.empty:
+            return None
+        tutte = sorted(dfp["Classe"].unique(), key=_ordina_classi)
+        elenco = [c for c in tutte if (not classi) or c in classi]
+        if not elenco:
+            return None
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for c in elenco:
+                pdf = genera_pdf_orario(df, plesso_nome, (c,))
+                if pdf is None:
+                    return None
+                nome = re.sub(r"[^A-Za-z0-9_-]+", "_", "Orario_" + ("D" if c == "D" else f"classe_{c}"))
+                zf.writestr(f"{nome}.pdf", pdf)
+        return buf.getvalue()
+    except Exception as e:
+        st.error(f"Errore durante la creazione dello ZIP: {e}")
+        return None
+
 def genera_html_stampa_sostituzioni(plesso_nome, data_sost, giorno_assente, tabella_df):
     data_leggibile = data_sost.strftime("%d/%m/%Y")
     titolo_giorno = f"{giorno_assente} {data_leggibile}"
@@ -1513,6 +1664,36 @@ elif menu == "Visualizza Orario":
 
         download_orario(orario_df)
 
+        st.subheader("🖨️ Esporta orario in PDF")
+        st.caption("Orario settimanale di ogni classe (una pagina per classe, A4 orizzontale), pronto da stampare.")
+        tutte_le_classi = sorted(_prepara_df_per_pdf(orario_df)["Classe"].unique(), key=_ordina_classi)
+        classi_pdf = st.multiselect(
+            "Classi da esportare (vuoto = tutte)",
+            tutte_le_classi,
+            key="classi_pdf",
+        )
+        classi_pdf_t = tuple(classi_pdf) if classi_pdf else None
+        col_pdf1, col_pdf2 = st.columns(2)
+        with col_pdf1:
+            pdf_bytes = genera_pdf_orario(orario_df, PLESSO_NAME, classi_pdf_t)
+            if pdf_bytes:
+                st.download_button(
+                    "📄 Scarica PDF (una pagina per classe)",
+                    data=pdf_bytes,
+                    file_name=f"Orario_{datetime.now().strftime('%Y%m%d')}.pdf",
+                    mime="application/pdf",
+                    type="primary",
+                )
+        with col_pdf2:
+            zip_bytes = genera_zip_pdf_classi(orario_df, PLESSO_NAME, classi_pdf_t)
+            if zip_bytes:
+                st.download_button(
+                    "🗂️ Scarica ZIP (un PDF per classe)",
+                    data=zip_bytes,
+                    file_name=f"Orario_classi_{datetime.now().strftime('%Y%m%d')}.zip",
+                    mime="application/zip",
+                )
+
 # --- STATISTICHE ---
 elif menu == "Statistiche":
     st.header("📊 Statistiche")
@@ -1746,6 +1927,8 @@ sostituzioni. Valgono sia per i curricolari sia per i docenti di sostegno.
 - Nella vista **👁️ Visualizza Orario** le ore D compaiono nella colonna **D**, in fondo
   alla griglia, così vedi subito chi è a disposizione in ogni ora.
 - Nei **CSV** importati la colonna `Disposizione` è facoltativa (valori TRUE/FALSE).
+- Sempre in **📅 Vedi** trovi **🖨️ Esporta orario in PDF**: un PDF con l'orario settimanale di ogni
+  classe (una pagina per classe) oppure uno ZIP con un PDF per classe. Puoi scegliere solo alcune classi.
         """)
 
     with st.expander("🚨 Come registrare una sostituzione", expanded=True):
