@@ -508,7 +508,11 @@ def create_excel_export():
             for sheet_name, df_sheet in [('Orario', df_orario), ('Storico Sostituzioni', df_storico), ('Storico Assenze', df_assenze)]:
                 worksheet = writer.sheets[sheet_name]
                 for idx, col in enumerate(df_sheet.columns):
-                    max_len = max(df_sheet[col].astype(str).map(len).max() if not df_sheet.empty else 0, len(str(col))) + 3
+                    # iloc evita problemi con nomi di colonna duplicati;
+                    # fillna("") evita che i NaN (float) rompano len()
+                    serie = df_sheet.iloc[:, idx].fillna("").astype(str)
+                    lunghezza_dati = int(serie.str.len().max()) if not serie.empty else 0
+                    max_len = min(max(lunghezza_dati, len(str(col))) + 3, 60)
                     worksheet.set_column(idx, idx, max_len)
                     
         output.seek(0)
