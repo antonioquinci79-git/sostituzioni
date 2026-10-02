@@ -6,3 +6,4 @@ gspread-dataframe
 oauth2client
 google-api-python-client
 xlsxwriter
+reportlab
