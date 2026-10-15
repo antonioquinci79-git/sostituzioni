@@ -20,14 +20,14 @@ from datetime import datetime
 # =========================
 # VERSIONE APP
 # =========================
-APP_VERSION = "3.4"
+APP_VERSION = "3.5"
 
 # =========================
 # CONFIGURAZIONE FILE / SHEETS
 # =========================
-REQUIRED_COLUMNS    = ["Docente", "Giorno", "Ora", "Classe", "Tipo", "Disposizione", "Escludi"]
+REQUIRED_COLUMNS    = ["Docente", "Giorno", "Ora", "Classe", "Tipo", "Disposizione", "Escludi", "Pagata"]
 # Colonne facoltative nei CSV importati (se mancano valgono False)
-COLONNE_OPZIONALI   = ["Disposizione", "Escludi"]
+COLONNE_OPZIONALI   = ["Disposizione", "Escludi", "Pagata"]
 ORARIO_SHEET        = "orario"
 STORICO_SHEET       = "storico"
 ASSENZE_SHEET       = "assenze"
@@ -211,7 +211,7 @@ def get_spreadsheet():
 def get_worksheet(sheet_name: str):
     headers_by_sheet = {
         ORARIO_SHEET: REQUIRED_COLUMNS,
-        STORICO_SHEET: ["data", "giorno", "docente", "ore"],
+        STORICO_SHEET: ["data", "giorno", "docente", "ore", "pagata"],
         ASSENZE_SHEET: ["data", "giorno", "docente", "ora", "classe"],
     }
     sh = get_spreadsheet()
@@ -226,6 +226,18 @@ def get_worksheet(sheet_name: str):
 def ensure_sheets_exist():
     for nome_foglio in (ORARIO_SHEET, STORICO_SHEET, ASSENZE_SHEET):
         get_worksheet(nome_foglio)
+    _assicura_colonna_pagata_storico()
+
+def _assicura_colonna_pagata_storico():
+    """Aggiunge l'intestazione 'pagata' al foglio storico se manca (una volta per sessione).
+    Le righe già presenti restano vuote e valgono 'non a pagamento'."""
+    if st.session_state.get("_storico_pagata_ok"):
+        return
+    ws = get_worksheet(STORICO_SHEET)
+    intestazione = [str(c).strip().lower() for c in ws.row_values(1)]
+    if "pagata" not in intestazione:
+        ws.update_cell(1, len(intestazione) + 1, "pagata")
+    st.session_state["_storico_pagata_ok"] = True
 
 # =========================
 # HELPER ORE A DISPOSIZIONE (D)
@@ -236,6 +248,13 @@ def _serie_bool(serie):
         return serie
     vere = {"true", "1", "1.0", "vero", "si", "sì", "x", "yes"}
     return serie.map(lambda v: str(v).strip().lower() in vere).astype(bool)
+
+def _normalizza_pagata(df):
+    """'Pagata' ha senso solo per le ore a disposizione: altrove vale sempre False."""
+    if "Pagata" not in df.columns:
+        df["Pagata"] = False
+    df["Pagata"] = _serie_bool(df["Pagata"]) & _serie_bool(df["Disposizione"])
+    return df
 
 def righe_senza_classe(df):
     """Righe che non hanno una classe e non sono ore a disposizione."""
@@ -264,6 +283,7 @@ def carica_orario():
             df[col] = df[col].fillna("").astype(str).str.strip()
         df["Disposizione"] = _serie_bool(df["Disposizione"])
         df.loc[df["Disposizione"], "Classe"] = ""
+        df = _normalizza_pagata(df)
         df = df.loc[:, REQUIRED_COLUMNS]
         return df
     except Exception as e:
@@ -279,6 +299,7 @@ def salva_orario(df):
                 df_to_save[col] = ""
         df_to_save["Disposizione"] = _serie_bool(df_to_save["Disposizione"])
         df_to_save.loc[df_to_save["Disposizione"], "Classe"] = ""
+        df_to_save = _normalizza_pagata(df_to_save)
         df_to_save = df_to_save[REQUIRED_COLUMNS]
         gd.set_with_dataframe(ws, df_to_save, include_index=False, include_column_header=True)
         carica_orario.clear()
@@ -301,6 +322,10 @@ def carica_statistiche():
         df_assenze = gd.get_as_dataframe(ws_assenze, header=0).dropna(how='all')
         
         if not df_storico.empty:
+            if "pagata" in df_storico.columns:
+                df_storico["pagata"] = _serie_bool(df_storico["pagata"])
+            else:
+                df_storico["pagata"] = False
             if "data" in df_storico.columns:
                 df_storico["data"] = pd.to_datetime(df_storico["data"], errors="coerce").dt.strftime("%Y-%m-%d")
             if "ore" in df_storico.columns:
@@ -317,13 +342,13 @@ def carica_statistiche():
                     df_assenze[c] = df_assenze[c].astype(str).str.strip()
                     
         if df_storico.empty:
-            df_storico = pd.DataFrame(columns=["data", "giorno", "docente", "ore"])
+            df_storico = pd.DataFrame(columns=["data", "giorno", "docente", "ore", "pagata"])
         if df_assenze.empty:
             df_assenze = pd.DataFrame(columns=["data", "giorno", "docente", "ora", "classe"])
         return df_storico, df_assenze
     except Exception as e:
         st.error(f"Errore nel caricamento delle statistiche da Google Sheets: {e}")
-        return pd.DataFrame(columns=["data", "giorno", "docente", "ore"]), pd.DataFrame(columns=["data", "giorno", "docente", "ora", "classe"])
+        return pd.DataFrame(columns=["data", "giorno", "docente", "ore", "pagata"]), pd.DataFrame(columns=["data", "giorno", "docente", "ora", "classe"])
 
 def calcola_dati_da_salvare(sostituzioni_df, ore_assenti):
     """Calcola le sostituzioni effettive e le ore effettivamente assenti da registrare
@@ -384,7 +409,8 @@ def salva_storico_assenze(data_sostituzione, giorno_assente, sostituzioni_df, or
         )
 
         storico_data = [
-            [str(data_sostituzione), giorno_assente, row["Sostituto"], 1]
+            [str(data_sostituzione), giorno_assente, row["Sostituto"], 1,
+             "[DP]" in str(row.get("Sostituto_display", ""))]
             for _, row in sostituzioni_effettive.iterrows()
         ]
 
@@ -411,7 +437,7 @@ def clear_sheet_content(sheet_name):
         ws = get_worksheet(sheet_name)
         ws.clear()
         if sheet_name == STORICO_SHEET:
-            ws.append_row(["data", "giorno", "docente", "ore"])
+            ws.append_row(["data", "giorno", "docente", "ore", "pagata"])
         elif sheet_name == ASSENZE_SHEET:
             ws.append_row(["data", "giorno", "docente", "ora", "classe"])
         if sheet_name in (STORICO_SHEET, ASSENZE_SHEET):
@@ -539,13 +565,15 @@ def trova_conflitti_orario(df):
     return [idx for idx, n in conteggi.items() if n > 1 and idx[0].strip() != ""]
 
 def _nome_da_label(label):
-    """Toglie tag ([S], [C], [D], [NP], [USCITA]) ed emoji da un'etichetta sostituto."""
-    nome = re.sub(r"\[(?:S|C|D|NP|USCITA)\]\s*", "", str(label))
-    nome = re.sub(r"[🔵🟡🟢🔴🟣]\s*", "", nome)
+    """Toglie tag ([S], [C], [D], [DP], [NP], [USCITA]) ed emoji da un'etichetta sostituto."""
+    nome = re.sub(r"\[(?:S|C|D|DP|NP|USCITA)\]\s*", "", str(label))
+    nome = re.sub(r"[🔵🟡🟢🔴🟣🟤]\s*", "", nome)
     return nome.strip()
 
 def _colore_tipo(label):
-    if "[D]" in label:
+    if "[DP]" in label:
+        return "#8C6A4F", "white", "🟤"
+    elif "[D]" in label:
         return "#7A6A99", "white", "🟣"
     elif "[S]" in label and "[NP]" not in label:
         return "#6B8F71", "white", "🔵"
@@ -562,6 +590,8 @@ def _badge_sostituto(label):
         return '<span style="color:#9C5F2C;font-style:italic;">— nessuno —</span>'
     bg, fg, _ = _colore_tipo(label)
     nome = _nome_da_label(label)
+    if "[DP]" in str(label):
+        nome += " (€)"
     return (f'<span style="background:{bg};color:{fg};border-radius:8px;'
             f'padding:3px 10px;font-weight:700;font-size:0.9em;">{nome}</span>')
 
@@ -597,6 +627,9 @@ def _prepara_df_per_pdf(df):
     """Come nella vista 'Vedi': le ore a disposizione diventano la classe 'D'."""
     d = df.copy()
     d.loc[d["Disposizione"], "Classe"] = "D"
+    if "Pagata" in d.columns:
+        m_pag = d["Disposizione"] & _serie_bool(d["Pagata"])
+        d.loc[m_pag, "Docente"] = d.loc[m_pag, "Docente"].astype(str) + " (€)"
     d = d[d["Classe"].astype(str).str.strip() != ""]
     return _curricolare_prima_del_sostegno(d)
 
@@ -629,7 +662,7 @@ def _pagina_classe_pdf(classe, df_classe, plesso_nome, data_gen):
         return html_lib.escape(str(t))
 
     if classe == "D":
-        titolo = "Docenti a disposizione (D)"
+        titolo = "Docenti a disposizione (D) — (€) = ora a pagamento"
     else:
         titolo = f"Classe {classe}"
 
@@ -847,6 +880,9 @@ def vista_pivot_docenti(df, mode="docenti"):
     elif mode == "classi":
         dfp = _curricolare_prima_del_sostegno(df.copy())
         dfp["Info"] = dfp["Docente"]
+        if "Pagata" in dfp.columns:
+            m_pag = dfp["Disposizione"] & _serie_bool(dfp["Pagata"])
+            dfp.loc[m_pag, "Info"] = dfp.loc[m_pag, "Docente"] + " (€)"
 
         pivot = dfp.pivot_table(
             index=["Giorno", "Ora"],
@@ -975,7 +1011,7 @@ if menu == "Inserisci/Modifica Orario":
         df_tmp = pd.read_csv(uploaded_file)
         
         # MAPPING GUIDATO DELLE COLONNE
-        colonne_csv = [c for c in REQUIRED_COLUMNS if c != "Disposizione"]  # Disposizione è facoltativa
+        colonne_csv = [c for c in REQUIRED_COLUMNS if c not in ("Disposizione", "Pagata")]  # facoltative
         if not all(col in df_tmp.columns for col in colonne_csv):
             st.info("💡 Mappa le colonne del tuo file CSV con le voci richieste dal sistema:")
             col_map = {}
@@ -1005,6 +1041,7 @@ if menu == "Inserisci/Modifica Orario":
                     df_nuovo["Escludi"] = _serie_bool(df_nuovo["Escludi"])
                     df_nuovo["Disposizione"] = _serie_bool(df_nuovo["Disposizione"])
                     df_nuovo.loc[df_nuovo["Disposizione"], "Classe"] = ""
+                    df_nuovo = _normalizza_pagata(df_nuovo)
 
                     valori_non_validi = df_nuovo[
                         ~df_nuovo["Giorno"].isin(GIORNI_SETTIMANA) | ~df_nuovo["Ora"].isin(ORE_LEZIONE)
@@ -1033,11 +1070,15 @@ if menu == "Inserisci/Modifica Orario":
             df_nuovo["Disposizione"] = (
                 _serie_bool(df_tmp["Disposizione"]) if "Disposizione" in df_tmp.columns else False
             )
+            df_nuovo["Pagata"] = (
+                _serie_bool(df_tmp["Pagata"]) if "Pagata" in df_tmp.columns else False
+            )
             df_nuovo = df_nuovo[REQUIRED_COLUMNS]
             for col in ["Docente", "Giorno", "Ora", "Classe", "Tipo"]:
                 df_nuovo[col] = df_nuovo[col].fillna("").astype(str).str.strip()
             df_nuovo["Disposizione"] = _serie_bool(df_nuovo["Disposizione"])
             df_nuovo.loc[df_nuovo["Disposizione"], "Classe"] = ""
+            df_nuovo = _normalizza_pagata(df_nuovo)
             valori_non_validi = df_nuovo[
                 ~df_nuovo["Giorno"].isin(GIORNI_SETTIMANA) | ~df_nuovo["Ora"].isin(ORE_LEZIONE)
             ]
@@ -1074,9 +1115,16 @@ if menu == "Inserisci/Modifica Orario":
             key="disposizione_input",
             help="Il docente è in servizio ma non ha una classe: sarà proposto per primo come sostituto."
         )
+        pagata = False
         if disposizione:
             classe = ""
             st.caption("Nessuna classe: il Tipo (Lezione/Sostegno) resta quello del docente.")
+            pagata = st.checkbox(
+                "💶 A pagamento (straordinario)",
+                key="pagata_input",
+                help="Ora a disposizione retribuita come straordinario: nelle sostituzioni viene "
+                     "proposta dopo i curricolari in uscita e registrata come ora a pagamento."
+            )
         else:
             classe = st.selectbox(
                 "Classe",
@@ -1098,7 +1146,8 @@ if menu == "Inserisci/Modifica Orario":
                     "Classe": classe,
                     "Tipo": tipo,
                     "Disposizione": disposizione,
-                    "Escludi": escludi
+                    "Escludi": escludi,
+                    "Pagata": pagata
                 }
                 nuovo = pd.DataFrame([row])
                 conflitto = not orario_df[
@@ -1140,6 +1189,10 @@ if menu == "Inserisci/Modifica Orario":
                     "Disposizione",
                     help="Ora a disposizione (D): in servizio senza classe, utilizzabile per sostituzioni."
                 ),
+                "Pagata": st.column_config.CheckboxColumn(
+                    "Pagata",
+                    help="Solo per le ore a disposizione: ora retribuita come straordinario."
+                ),
             }
         )
         if st.button("Salva modifiche", type="primary"):
@@ -1148,6 +1201,7 @@ if menu == "Inserisci/Modifica Orario":
                 df_da_salvare[col] = df_da_salvare[col].fillna("").astype(str).str.strip()
             df_da_salvare["Disposizione"] = _serie_bool(df_da_salvare["Disposizione"])
             df_da_salvare.loc[df_da_salvare["Disposizione"], "Classe"] = ""
+            df_da_salvare = _normalizza_pagata(df_da_salvare)
             df_da_salvare = df_da_salvare[df_da_salvare["Docente"] != ""].copy()
 
             conflitti_edit = trova_conflitti_orario(df_da_salvare)
@@ -1304,7 +1358,9 @@ elif menu == "Gestione Assenze":
 
                     # Separo i docenti a disposizione (D) da quelli con una classe
                     mask_d = presenti_ora_df["Disposizione"]
-                    docenti_disp = sorted(presenti_ora_df[mask_d]["Docente"].unique().tolist())
+                    mask_dp = mask_d & presenti_ora_df["Pagata"]
+                    docenti_disp = sorted(presenti_ora_df[mask_d & ~mask_dp]["Docente"].unique().tolist())
+                    docenti_disp_pag = sorted(presenti_ora_df[mask_dp]["Docente"].unique().tolist())
                     presenti_ora_df = presenti_ora_df[~mask_d].copy()
 
                     added = set()
@@ -1353,6 +1409,12 @@ elif menu == "Gestione Assenze":
                         label = f"🟡 [C] [USCITA] {d}"
                         options.append(label); added.add(d)
 
+                    # D a pagamento (straordinario): dopo i curricolari in uscita
+                    for d in docenti_disp_pag:
+                        if d in added:
+                            continue
+                        options.append(f"🟤 [DP] {d}"); added.add(d)
+
                     for d in sorted(curricolari_occupati):
                         if d in added:
                             continue
@@ -1392,6 +1454,7 @@ elif menu == "Gestione Assenze":
                     # D: evito di proporre lo stesso docente a due assenti nella stessa ora
                     gia_scelti_ora = {x["Sostituto"] for x in sostituzioni if x["Ora"] == ora}
                     d_liberi = [d for d in docenti_disp if d not in gia_scelti_ora]
+                    dp_liberi = [d for d in docenti_disp_pag if d not in gia_scelti_ora]
                     if len(d_liberi) > 0:
                         proposto_display = f"🟣 [D] {d_liberi[0]}"
                     elif len(same_class_sost) > 0:
@@ -1400,6 +1463,8 @@ elif menu == "Gestione Assenze":
                         proposto_display = f"🔵 [S] {sorted(other_sost)[0]}"
                     elif len(curricolari_liberi_uscita) > 0:
                         proposto_display = f"🟡 [C] [USCITA] {sorted(curricolari_liberi_uscita)[0]}"
+                    elif len(dp_liberi) > 0:
+                        proposto_display = f"🟤 [DP] {dp_liberi[0]}"
                     elif len(curricolari_occupati) > 0:
                         proposto_display = f"🔴 [C] {sorted(curricolari_occupati)[0]}"
                     elif len(np_sost) > 0:
@@ -1433,7 +1498,8 @@ elif menu == "Gestione Assenze":
 
                     bg2, fg2, ico2 = _colore_tipo(scelta)
                     tipo_label = (
-                        "A disposizione" if "[D]" in scelta
+                        "A disposizione (a pagamento)" if "[DP]" in scelta
+                        else "A disposizione" if "[D]" in scelta
                         else "Sostegno" if "[S]" in scelta and "[NP]" not in scelta
                         else "Uscita" if "[USCITA]" in scelta
                         else "Non in orario (Libero)" if "[NP]" in scelta
@@ -1800,6 +1866,22 @@ elif menu == "Statistiche":
         st.dataframe(df_sorted, use_container_width=True, hide_index=True)
         st.bar_chart(df_sorted.set_index("docente"))
 
+        st.subheader("💶 Ore a disposizione a pagamento (straordinario)")
+        df_pag = df_storico[df_storico["pagata"]].copy()
+        if df_pag.empty:
+            st.info("Nessuna ora a pagamento registrata nell'intervallo di date selezionato.")
+        else:
+            df_pag_sum = (
+                df_pag.groupby("docente")["ore"].sum().reset_index()
+                .rename(columns={"ore": "Ore a pagamento"})
+                .sort_values("Ore a pagamento", ascending=False).reset_index(drop=True)
+            )
+            st.metric("Totale ore a pagamento nel periodo", int(df_pag_sum["Ore a pagamento"].sum()))
+            st.dataframe(df_pag_sum, use_container_width=True, hide_index=True)
+            with st.expander("Dettaglio per data (utile per il riepilogo di pagamento)"):
+                dettaglio = df_pag[["data", "giorno", "docente", "ore"]].sort_values(["docente", "data"])
+                st.dataframe(dettaglio, use_container_width=True, hide_index=True)
+
     st.subheader("⚠️ Azzeramento storico sostituzioni")
     conferma = st.checkbox("Confermo di voler cancellare definitivamente lo storico delle sostituzioni", key="conf_storico")
     if st.button("Elimina storico sostituzioni"):
@@ -1936,6 +2018,16 @@ sostituzioni. Valgono sia per i curricolari sia per i docenti di sostegno.
 - Nella vista **👁️ Visualizza Orario** le ore D compaiono nella colonna **D**, in fondo
   alla griglia, così vedi subito chi è a disposizione in ogni ora.
 - Nei **CSV** importati la colonna `Disposizione` è facoltativa (valori TRUE/FALSE).
+
+**🟤 Ore a disposizione a pagamento (straordinario)**
+- Nel modulo, dopo aver spuntato **"Ora a disposizione (D)"**, spunta anche
+  **"A pagamento (straordinario)"**. Nella tabella usa la colonna **Pagata** (vale solo
+  per le righe con Disposizione spuntata). Nei CSV la colonna `Pagata` è facoltativa.
+- Nelle sostituzioni questi docenti compaiono come **🟤 [DP]**, dopo i curricolari in uscita
+  e prima dei curricolari occupati.
+- Quando ne scegli uno e salvi, l'ora viene registrata nello storico come **a pagamento**:
+  le trovi in **📊 Statistiche → Ore a disposizione a pagamento**, con totale e dettaglio per data.
+- In Visualizza Orario e nei PDF compaiono nella colonna D con il simbolo **(€)**.
 - Sempre in **📅 Vedi** trovi **🖨️ Esporta orario in PDF**: un PDF con l'orario settimanale di ogni
   classe (una pagina per classe) oppure uno ZIP con un PDF per classe. Puoi scegliere solo alcune classi.
         """)
@@ -1981,6 +2073,10 @@ sostituzioni. Valgono sia per i curricolari sia per i docenti di sostegno.
         _riga_legenda("#5E7A93", "🟡", "Uscita",
                       "Docente curricolare libero perché la sua classe esce anticipatamente "
                       "in quell'ora.")
+        _riga_legenda("#8C6A4F", "🟤", "A disposizione (a pagamento)",
+                      "Docente a disposizione (D) la cui ora è retribuita come straordinario. "
+                      "Viene proposto dopo i curricolari in uscita; l'ora è registrata nello "
+                      "storico come ora a pagamento.")
         _riga_legenda("#C97D3D", "🔴", "Curricolare (Occupato)",
                       "Docente curricolare già impegnato con un'altra classe in quell'ora. "
                       "Proposto solo se non ci sono alternative migliori: valuta con attenzione "
@@ -2008,6 +2104,8 @@ Nella sezione **📊 Stats** puoi filtrare tutto per **intervallo di date** in a
 - La tabella e il grafico sottostanti mostrano il totale ore per ogni docente che ha
   effettuato almeno una sostituzione. Le sostituzioni fatte da docenti a
   disposizione (D) contano come tutte le altre.
+- **💶 Ore a disposizione a pagamento**: totale (e dettaglio per data) delle ore di
+  sostituzione svolte da docenti D a pagamento nel periodo selezionato.
 
 **Statistiche assenze**
 - **🟠 Più assenze**: i 3 docenti con più ore/giorni di assenza registrati nel periodo.
