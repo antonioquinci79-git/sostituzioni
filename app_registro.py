@@ -398,8 +398,59 @@ def trova_assenze_duplicate(data_sostituzione, ore_effettivamente_assenti):
     return duplicati
 
 
-def salva_storico_assenze(data_sostituzione, giorno_assente, sostituzioni_df, ore_assenti):
-    """Salvataggio coordinato ed esplicito su Google Sheets."""
+def _righe_sheet_per_data(ws, data_sostituzione):
+    """Numeri di riga (1-based, intestazione esclusa) del foglio con la data indicata.
+    La data viene interpretata come in carica_statistiche, così ciò che viene
+    segnalato come già salvato coincide con ciò che viene eliminato."""
+    valori = ws.get_all_values()
+    if not valori:
+        return []
+    header = [str(h).strip().lower() for h in valori[0]]
+    if "data" not in header:
+        return []
+    i = header.index("data")
+    data_str = str(data_sostituzione)
+    righe = []
+    for n, riga in enumerate(valori[1:], start=2):
+        if i < len(riga):
+            d = pd.to_datetime(riga[i], errors="coerce")
+            if pd.notna(d) and d.strftime("%Y-%m-%d") == data_str:
+                righe.append(n)
+    return righe
+
+def _elimina_righe_sheet(ws, righe):
+    """Elimina le righe indicate raggruppandole in blocchi contigui
+    (poche chiamate API) e partendo dal basso per non sfalsare gli indici."""
+    if not righe:
+        return
+    blocchi = []
+    inizio = prec = righe[0]
+    for r in righe[1:]:
+        if r == prec + 1:
+            prec = r
+        else:
+            blocchi.append((inizio, prec))
+            inizio = prec = r
+    blocchi.append((inizio, prec))
+    for a, b in reversed(blocchi):
+        ws.delete_rows(a, b)
+
+def salvato_per_data(data_sostituzione):
+    """Restituisce (storico, assenze) già registrati per la data indicata."""
+    try:
+        df_storico, df_assenze = carica_statistiche()
+    except Exception:
+        return pd.DataFrame(), pd.DataFrame()
+    data_str = str(data_sostituzione)
+    st_d = df_storico[df_storico["data"] == data_str] if not df_storico.empty else df_storico
+    as_d = df_assenze[df_assenze["data"] == data_str] if not df_assenze.empty else df_assenze
+    return st_d, as_d
+
+def salva_storico_assenze(data_sostituzione, giorno_assente, sostituzioni_df, ore_assenti, sostituisci=False):
+    """Salvataggio coordinato ed esplicito su Google Sheets.
+    Con sostituisci=True le righe già presenti per quella data vengono rimpiazzate
+    dalla nuova versione (prima si aggiunge il nuovo, poi si eliminano le vecchie:
+    in caso di errore si rischia un doppione, mai una perdita di dati)."""
     try:
         ws_storico = get_worksheet(STORICO_SHEET)
         ws_assenze = get_worksheet(ASSENZE_SHEET)
@@ -419,10 +470,20 @@ def salva_storico_assenze(data_sostituzione, giorno_assente, sostituzioni_df, or
             for _, row in ore_effettivamente_assenti.iterrows()
         ]
 
+        righe_vecchie_storico, righe_vecchie_assenze = [], []
+        if sostituisci:
+            # Individuo le righe vecchie PRIMA di aggiungere le nuove
+            righe_vecchie_storico = _righe_sheet_per_data(ws_storico, data_sostituzione)
+            righe_vecchie_assenze = _righe_sheet_per_data(ws_assenze, data_sostituzione)
+
         if storico_data:
             ws_storico.append_rows(storico_data, value_input_option="USER_ENTERED")
         if assenze_data:
             ws_assenze.append_rows(assenze_data, value_input_option="USER_ENTERED")
+
+        if sostituisci:
+            _elimina_righe_sheet(ws_storico, righe_vecchie_storico)
+            _elimina_righe_sheet(ws_assenze, righe_vecchie_assenze)
 
         carica_statistiche.clear()
         create_backup.clear()
@@ -1673,32 +1734,64 @@ document.getElementById('copia-sostituzioni-btn').addEventListener('click', func
                     _, ore_effettive_tmp = calcola_dati_da_salvare(sost_df, ore_assenti_session)
                     duplicati = trova_assenze_duplicate(data_tmp, ore_effettive_tmp)
 
-                    conferma_duplicati = True
+                    sostituisci = False
                     if duplicati:
+                        st_salv, as_salv = salvato_per_data(data_tmp)
                         st.warning(
-                            "⚠️ Attenzione: per questa data risultano già registrate assenze "
-                            "con lo stesso docente, ora e classe. Se procedi rischi di creare "
-                            "un doppione nello storico."
+                            "⚠️ Per questa data risultano già registrate assenze con lo stesso "
+                            "docente, ora e classe. Se aggiungi di nuovo, nello storico "
+                            "compariranno dei doppioni (e le ore dei sostituti verranno contate due volte)."
                         )
                         for docente_d, ora_d, classe_d in duplicati:
                             st.write(f"- **{docente_d}**, ora {ora_d}, classe {classe_d}")
-                        conferma_duplicati = st.checkbox(
-                            "Ho verificato, salva comunque",
-                            key="conferma_salvataggio_duplicati"
+
+                        scelta_salv = st.radio(
+                            "Come vuoi procedere?",
+                            [
+                                "🔄 Sostituisci quanto già salvato per questa data",
+                                "➕ Aggiungi comunque (crea doppioni)",
+                            ],
+                            key="scelta_salvataggio_duplicati",
                         )
+                        sostituisci = scelta_salv.startswith("🔄")
+
+                        if sostituisci:
+                            st.info(
+                                f"Verranno eliminate {len(as_salv)} righe di assenze e "
+                                f"{len(st_salv)} righe di sostituzioni già salvate per il {data_tmp} "
+                                "e rimpiazzate con la tabella confermata qui sopra. "
+                                "Usa questa opzione solo se la tabella contiene **tutte** "
+                                "le assenze della giornata."
+                            )
+                            chiavi_nuove = set(
+                                zip(ore_effettive_tmp["Docente"].astype(str),
+                                    ore_effettive_tmp["Ora"].astype(str),
+                                    ore_effettive_tmp["Classe"].astype(str))
+                            ) if not ore_effettive_tmp.empty else set()
+                            perse = [
+                                (r["docente"], r["ora"], r["classe"])
+                                for _, r in as_salv.iterrows()
+                                if (str(r["docente"]), str(r["ora"]), str(r["classe"])) not in chiavi_nuove
+                            ]
+                            if perse:
+                                st.warning(
+                                    "Queste assenze già salvate NON sono nella nuova tabella "
+                                    "e andrebbero perse:"
+                                )
+                                for d_p, o_p, c_p in perse:
+                                    st.write(f"- **{d_p}**, ora {o_p}, classe {c_p}")
 
                     if st.button(
                         "💾 Salva nello storico",
                         key="save_storico_main",
                         type="primary",
-                        disabled=bool(duplicati) and not conferma_duplicati
                     ):
                         if sost_df is not None and ore_assenti_session is not None:
-                            if salva_storico_assenze(data_tmp, giorno_tmp, sost_df, ore_assenti_session):
+                            if salva_storico_assenze(data_tmp, giorno_tmp, sost_df, ore_assenti_session, sostituisci=sostituisci):
                                 st.success("Assenze e sostituzioni salvate nello storico ✅")
                                 for k in ["sostituzioni_confermate", "ore_assenti_confermate",
                                           "data_sostituzione_tmp", "giorno_assente_tmp",
-                                          "conferma_salvataggio_duplicati"]:
+                                          "scelta_salvataggio_duplicati"]:
                                     st.session_state.pop(k, None)
                                 try:
                                     st.rerun()
