@@ -982,6 +982,14 @@ except Exception as e:
 with st.spinner('Caricamento orario...'):
     orario_df = carica_orario()
 
+_conflitti_load = trova_conflitti_orario(orario_df)
+if _conflitti_load:
+    st.warning(
+        "⚠️ Nell'orario ci sono docenti inseriti più volte nella stessa ora: "
+        + "; ".join(f"{d} {g} ora {o}" for d, g, o in _conflitti_load)
+        + ". Correggi l'orario in 'Modifica orario attuale'."
+    )
+
 # =========================
 # MENU PRINCIPALE
 # =========================
@@ -1330,7 +1338,7 @@ elif menu == "Gestione Assenze":
 
                 ora_corrente = None
 
-                for _, row in ore_assenti.iterrows():
+                for idx, row in ore_assenti.iterrows():
                     ora = row["Ora"]
                     classe = row["Classe"]
                     assente = row["Docente"]
@@ -1492,7 +1500,7 @@ elif menu == "Gestione Assenze":
                         f"Sostituto",
                         options,
                         index=default_index,
-                        key=f"sost_{assente}_{ora}_{classe}",
+                        key=f"sost_{idx}_{assente}_{ora}_{classe}",
                         label_visibility="collapsed",
                     )
 
