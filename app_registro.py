@@ -1389,8 +1389,20 @@ elif menu == "Gestione Assenze":
                 ore_accomp_df["Accompagnatore"] = True
                 ore_assenti = pd.concat([ore_assenti, ore_accomp_df], ignore_index=True)
 
+            # Un docente di sostegno assente non lascia la classe scoperta: le sue ore
+            # non vanno nelle "Ore scoperte" (resta comunque escluso dai sostituti).
+            _e_sostegno = ore_assenti["Tipo"].astype(str).str.strip().str.lower() == "sostegno"
+            n_ore_sostegno = int(_e_sostegno.sum())
+            ore_assenti = ore_assenti[~_e_sostegno].copy()
+
             if ore_assenti.empty:
-                st.info("I docenti selezionati non hanno lezioni in quel giorno.")
+                if n_ore_sostegno:
+                    st.info(
+                        "I docenti selezionati hanno solo ore di sostegno: nessuna classe da coprire. "
+                        "Non vengono proposti come sostituti per quel giorno."
+                    )
+                else:
+                    st.info("I docenti selezionati non hanno lezioni in quel giorno.")
             else:
                 st.subheader("📌 Ore scoperte")
 
@@ -1405,7 +1417,8 @@ elif menu == "Gestione Assenze":
                         (orario_df["Giorno"] == giorno_assente) &
                         (orario_df["Ora"] == ora) &
                         (orario_df["Classe"] == classe) &
-                        (orario_df["Tipo"].str.lower() == "sostegno")
+                        (orario_df["Tipo"].str.lower() == "sostegno") &
+                        (~orario_df["Docente"].isin(set(docenti_assenti) | accompagnatori_per_ora.get(ora, set())))
                     ]
 
                     if sost_df.empty:
@@ -2158,6 +2171,8 @@ elif menu == "Guida":
 3. Nella tabella sottostante puoi **modificare o eliminare** le righe esistenti.
 4. Ricorda di distinguere i docenti di **Sostegno** dai **Curricolari**: questa
    informazione determina come vengono proposti come sostituti nella sezione Assenze.
+   Se un docente di **Sostegno** è assente, le sue ore non compaiono tra le ore
+   scoperte e lui non viene proposto come sostituto.
 
 **🟣 Ore a disposizione (D)**
 
